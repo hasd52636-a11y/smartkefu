@@ -252,6 +252,8 @@ const App: React.FC = () => {
                     {/* 商家后台专有功能 */}
                     <Route path="/knowledge" element={<KnowledgeBase />} />
                     <Route path="/search" element={<SmartSearch />} />
+                    {/* 用户扫码查看路径 */}
+                    <Route path="/view/:id" element={<UserPreview projects={projects} />} />
                   </Routes>
                 </main>
               </div>

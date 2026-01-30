@@ -10,10 +10,32 @@ import {
 import { aiService, RealtimeCallback, Annotation } from '../services/aiService';
 
 const UserPreview: React.FC<{ projects: ProductProject[] }> = ({ projects }) => {
-  const { projectId } = useParams();
-  const project = projects.find(p => p.id === projectId);
+  const { id } = useParams();
+  const project = projects.find(p => p.id === id);
+  
+  // 处理项目不存在的情况
+  if (!project) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-[#0f1218] to-[#1a1d29] flex flex-col items-center justify-center p-6">
+        <div className="glass-card max-w-md w-full p-12 rounded-[3rem] border border-slate-700 text-center">
+          <div className="w-20 h-20 bg-red-500/20 text-red-400 rounded-full flex items-center justify-center mx-auto mb-8">
+            <AlertCircle size={40} />
+          </div>
+          <h1 className="text-2xl font-black text-white mb-4">Invalid Project</h1>
+          <p className="text-slate-400 mb-8">找不到对应的项目信息，请检查二维码是否正确。</p>
+          <button 
+            onClick={() => window.location.href = '#/'} 
+            className="purple-gradient-btn text-white px-8 py-4 rounded-2xl font-black"
+          >
+            返回首页
+          </button>
+        </div>
+      </div>
+    );
+  }
+  
   const [messages, setMessages] = useState<{role: 'user' | 'assistant', text: string, image?: string}[]>([
-    { role: 'assistant', text: `您好！我是 ${project?.name || '产品'} 的 AI 专家。我已经加载了最新的产品说明书和视频教程，请问有什么可以帮您？` }
+    { role: 'assistant', text: `您好！我是 ${project.name} 的 AI 专家。我已经加载了最新的产品说明书和视频教程，请问有什么可以帮您？` }
   ]);
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
