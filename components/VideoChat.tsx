@@ -8,52 +8,12 @@ import {
   FileText, AlertCircle, CheckCircle, Loader2
 } from 'lucide-react';
 import { aiService, RealtimeCallback, Annotation } from '../services/aiService';
-import { projectService } from '../services/projectService';
 
-const VideoChat: React.FC<{ projects?: ProductProject[] }> = ({ projects }) => {
-  const { projectId } = useParams();
-  const [project, setProject] = useState<ProductProject | null>(null);
-  const [projectLoading, setProjectLoading] = useState(true);
-  const [projectError, setProjectError] = useState<string>('');
-
-  // 从服务端加载项目数据
-  useEffect(() => {
-    const loadProject = async () => {
-      if (!projectId) {
-        setProjectError('无效的项目ID');
-        setProjectLoading(false);
-        return;
-      }
-
-      try {
-        setProjectLoading(true);
-        const validation = await projectService.validateProjectId(projectId);
-        
-        if (!validation.valid) {
-          setProjectError(validation.error || '项目验证失败');
-          setProjectLoading(false);
-          return;
-        }
-
-        setProject(validation.project!);
-        
-        // 记录用户访问
-        await projectService.logUserAccess(projectId, {
-          timestamp: new Date().toISOString(),
-          userAgent: navigator.userAgent,
-          referrer: document.referrer
-        });
-        
-        setProjectLoading(false);
-      } catch (error) {
-        console.error('Failed to load project:', error);
-        setProjectError('加载项目信息失败，请稍后重试');
-        setProjectLoading(false);
-      }
-    };
-
-    loadProject();
-  }, [projectId]);
+const VideoChat: React.FC<{ projects: ProductProject[] }> = ({ projects }) => {
+  const { id } = useParams();
+  const projectId = id;
+  // Use the first project if no projectId is provided
+  const project = projectId ? projects.find(p => p.id === projectId) : projects[0];
   
   // 视频和音频状态
   const [videoStream, setVideoStream] = useState<MediaStream | null>(null);
@@ -64,7 +24,6 @@ const VideoChat: React.FC<{ projects?: ProductProject[] }> = ({ projects }) => {
   // 连接状态
   const [isConnected, setIsConnected] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState('disconnected');
-  const [connectionError, setConnectionError] = useState<string>('');
   
   // 对话状态
   const [messages, setMessages] = useState<{role: 'user' | 'assistant', text: string}[]>([]);
@@ -99,26 +58,18 @@ const VideoChat: React.FC<{ projects?: ProductProject[] }> = ({ projects }) => {
   
   // 初始化
   useEffect(() => {
-    // 加载商家预配置的API密钥
-    const savedApiKey = localStorage.getItem('zhipuApiKey');
-    if (savedApiKey) {
-      aiService.setZhipuApiKey(savedApiKey);
-    }
-    
-    if (project && !projectLoading && !projectError) {
+    if (project) {
       initializeVideoChat();
     }
     
     return () => {
       cleanup();
     };
-  }, [project, projectLoading, projectError]);
+  }, [project]);
   
   // 初始化视频对话
   const initializeVideoChat = async () => {
     try {
-      setConnectionStatus('connecting');
-      
       // 请求摄像头和麦克风权限
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
@@ -145,35 +96,12 @@ const VideoChat: React.FC<{ projects?: ProductProject[] }> = ({ projects }) => {
       
     } catch (error) {
       console.error('Failed to initialize video chat:', error);
-      
-      if (error instanceof Error) {
-        if (error.name === 'NotAllowedError') {
-          setConnectionError('摄像头或麦克风权限被拒绝，请在浏览器设置中允许访问');
-        } else if (error.name === 'NotFoundError') {
-          setConnectionError('未找到摄像头或麦克风设备');
-        } else if (error.name === 'NotReadableError') {
-          setConnectionError('摄像头或麦克风被其他应用占用');
-        } else {
-          setConnectionError(`设备访问失败: ${error.message}`);
-        }
-      } else {
-        setConnectionError('初始化视频对话失败');
-      }
-      
-      setConnectionStatus('error');
+      alert('无法访问摄像头或麦克风，请检查权限设置。');
     }
   };
   
   // 连接到GLM-Realtime
   const connectToRealtime = async () => {
-    // 检查API密钥
-    const savedApiKey = localStorage.getItem('zhipuApiKey');
-    if (!savedApiKey) {
-      console.error('No API key found');
-      setConnectionStatus('error');
-      return;
-    }
-    
     const callback: RealtimeCallback = (data, type) => {
       switch (type) {
         case 'status':
@@ -224,33 +152,12 @@ const VideoChat: React.FC<{ projects?: ProductProject[] }> = ({ projects }) => {
           
           // 绘制标注
           drawAnnotations(ctx);
-          
-          // 每隔一定时间发送视频帧到GLM-Realtime（降低频率以节省带宽）
-          if (animationFrameRef.current && animationFrameRef.current % 30 === 0) {
-            sendVideoFrame();
-          }
         }
       }
       animationFrameRef.current = requestAnimationFrame(render);
     };
     
     animationFrameRef.current = requestAnimationFrame(render);
-  };
-  
-  // 发送视频帧
-  const sendVideoFrame = () => {
-    if (canvasRef.current && isConnected) {
-      canvasRef.current.toBlob((blob) => {
-        if (blob) {
-          const reader = new FileReader();
-          reader.onload = () => {
-            const base64 = (reader.result as string).split(',')[1];
-            aiService.sendVideoFrame(base64);
-          };
-          reader.readAsDataURL(blob);
-        }
-      }, 'image/jpeg', 0.8);
-    }
   };
   
   // 绘制标注
@@ -520,109 +427,7 @@ const VideoChat: React.FC<{ projects?: ProductProject[] }> = ({ projects }) => {
     fileInputRef.current?.click();
   };
   
-  // 项目加载中
-  if (projectLoading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-[#0a0c10] to-[#1a1d29] flex flex-col items-center justify-center p-6">
-        <div className="max-w-md w-full bg-white rounded-[3rem] border-2 border-violet-500/30 p-8 shadow-2xl">
-          <div className="text-center">
-            <div className="w-20 h-20 bg-violet-500/20 text-violet-600 rounded-full flex items-center justify-center mx-auto mb-6">
-              <Loader2 className="animate-spin" size={40} />
-            </div>
-            <h1 className="text-2xl font-black text-violet-800 mb-4">正在连接视频服务</h1>
-            <p className="text-slate-600">正在验证二维码并初始化视频客服...</p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (!project || projectError) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-[#0a0c10] to-[#1a1d29] flex flex-col items-center justify-center p-6">
-        <div className="max-w-md w-full bg-white rounded-[3rem] border-2 border-red-500/30 p-8 shadow-2xl">
-          <div className="text-center mb-8">
-            <div className="w-20 h-20 bg-red-500/20 text-red-600 rounded-full flex items-center justify-center mx-auto mb-6">
-              <AlertCircle size={40} />
-            </div>
-            <h1 className="text-2xl font-black text-red-800 mb-4">视频服务不可用</h1>
-            <p className="text-slate-600 text-center mb-4">
-              {projectError || '找不到对应的项目信息，请检查二维码是否正确。'}
-            </p>
-            
-            <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6">
-              <p className="text-sm text-red-800">
-                <strong>可能的解决方案：</strong><br/>
-                • 检查二维码是否有效<br/>
-                • 确认产品服务状态<br/>
-                • 刷新页面重新尝试<br/>
-                • 联系中恒创世技术支持
-              </p>
-            </div>
-            
-            <div className="flex gap-3">
-              <button 
-                onClick={() => window.location.reload()}
-                className="flex-1 px-4 py-3 bg-red-500 text-white font-bold rounded-xl hover:bg-red-600 transition-all"
-              >
-                重新连接
-              </button>
-              <button 
-                onClick={() => window.history.back()}
-                className="flex-1 px-4 py-3 bg-slate-200 text-slate-700 font-bold rounded-xl hover:bg-slate-300 transition-all"
-              >
-                返回
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (!project) return <div className="p-10 text-center text-white bg-slate-900 h-screen flex items-center justify-center">项目加载失败</div>;
-  
-  // 显示连接错误
-  if (connectionStatus === 'error') {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-[#0a0c10] to-[#1a1d29] flex flex-col items-center justify-center p-6">
-        <div className="max-w-md w-full bg-white rounded-[3rem] border-2 border-red-500/30 p-8 shadow-2xl">
-          <div className="text-center mb-8">
-            <div className="w-20 h-20 bg-red-500/20 text-red-600 rounded-full flex items-center justify-center mx-auto mb-6">
-              <AlertCircle size={40} />
-            </div>
-            <h1 className="text-2xl font-black text-red-800 mb-4">视频客服连接失败</h1>
-            <p className="text-slate-600 text-center mb-4">{connectionError}</p>
-            
-            <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6">
-              <p className="text-sm text-red-800">
-                <strong>可能的解决方案：</strong><br/>
-                • 检查摄像头和麦克风权限<br/>
-                • 确保设备未被其他应用占用<br/>
-                • 刷新页面重新尝试<br/>
-                • 联系技术支持获取帮助
-              </p>
-            </div>
-            
-            <div className="flex gap-3">
-              <button 
-                onClick={() => window.location.reload()}
-                className="flex-1 px-4 py-3 bg-red-500 text-white font-bold rounded-xl hover:bg-red-600 transition-all"
-              >
-                重新连接
-              </button>
-              <button 
-                onClick={() => window.history.back()}
-                className="flex-1 px-4 py-3 bg-slate-200 text-slate-700 font-bold rounded-xl hover:bg-slate-300 transition-all"
-              >
-                返回
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  if (!project) return <div className="p-10 text-center text-white bg-slate-900 h-screen flex items-center justify-center">{projects.length === 0 ? 'No projects available' : 'Invalid Project'}</div>;
   
   return (
     <div className="flex flex-col h-screen w-full max-w-6xl mx-auto bg-[#0a0c10] shadow-2xl relative overflow-hidden font-sans">
@@ -637,15 +442,9 @@ const VideoChat: React.FC<{ projects?: ProductProject[] }> = ({ projects }) => {
               <h1 className="font-black text-lg">{project.name} - 视频客服</h1>
               <div className="flex items-center gap-4 mt-2">
                 <div className="flex items-center gap-2">
-                  <span className={`w-2 h-2 rounded-full ${
-                    connectionStatus === 'connected' ? 'bg-emerald-400 animate-pulse' : 
-                    connectionStatus === 'connecting' ? 'bg-yellow-400 animate-pulse' :
-                    connectionStatus === 'error' ? 'bg-red-500' : 'bg-red-500'
-                  }`}></span>
+                  <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-400 animate-pulse' : 'bg-red-500'}`}></span>
                   <span className="text-[10px] font-black uppercase tracking-widest">
-                    {connectionStatus === 'connected' ? '已连接' : 
-                     connectionStatus === 'connecting' ? '连接中' :
-                     connectionStatus === 'error' ? '连接失败' : '未连接'}
+                    {connectionStatus === 'connected' ? '已连接' : '未连接'}
                   </span>
                 </div>
                 <div className="text-[10px] text-slate-400 font-black uppercase tracking-widest">

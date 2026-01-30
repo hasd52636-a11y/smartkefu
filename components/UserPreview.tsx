@@ -11,7 +11,8 @@ import { aiService, RealtimeCallback, Annotation } from '../services/aiService';
 import { projectService } from '../services/projectService';
 
 const UserPreview: React.FC<{ projects?: ProductProject[] }> = ({ projects }) => {
-  const { projectId } = useParams();
+  const { id } = useParams();
+  const projectId = id;
   const [project, setProject] = useState<ProductProject | null>(null);
   const [projectLoading, setProjectLoading] = useState(true);
   const [projectError, setProjectError] = useState<string>('');

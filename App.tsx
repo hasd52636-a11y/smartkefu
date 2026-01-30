@@ -214,8 +214,8 @@ const App: React.FC = () => {
       <div className="flex min-h-screen">
         <Routes>
           {/* 用户端路由（扫码进入） - 绝对安全隔离 */}
-          <Route path="/view/:projectId" element={<UserPreview />} />
-          <Route path="/video/:projectId" element={<VideoChat />} />
+          <Route path="/view/:id" element={<UserPreview projects={projects} />} />
+          <Route path="/video/:id" element={<VideoChat />} />
           
           {/* 商家后台路由 - 需要明确路径访问 */}
           <Route path="/merchant" element={<Navigate to="/merchant/dashboard" replace />} />
@@ -264,8 +264,52 @@ const App: React.FC = () => {
             </>
           } />
           
-          {/* 默认路由 - 显示用户友好的欢迎页面，绝不跳转到商家后台 */}
-          <Route path="*" element={<PublicWelcomePage />} />
+          {/* 默认重定向到商家后台 */}
+          <Route path="*" element={
+            <>
+              <Sidebar projects={projects} />
+              <div className="flex-1 flex flex-col min-w-0">
+                <header className="h-24 border-b border-slate-200 bg-white/80 flex items-center justify-between px-12 sticky top-0 z-10 backdrop-blur-2xl">
+                  <div className="flex items-center gap-4 bg-slate-100 border border-slate-200 px-6 py-3 rounded-2xl w-[450px] shadow-inner focus-within:border-amber-500/50 transition-all">
+                    <Search size={18} className="text-slate-500" />
+                    <input 
+                      type="text" 
+                      placeholder="搜索资产或向导 Search guide assets..." 
+                      className="bg-transparent border-none outline-none text-sm w-full text-slate-700 placeholder-slate-500 font-medium"
+                    />
+                  </div>
+                  <div className="flex items-center gap-10">
+                    <button className="text-slate-500 hover:text-amber-500 transition-all relative">
+                      <Bell size={24} />
+                      <span className="absolute -top-1 -right-1 w-4 h-4 bg-pink-500 rounded-full border-4 border-white shadow-lg"></span>
+                    </button>
+                    <div className="flex items-center gap-5 pl-10 border-l border-slate-200">
+                      <div className="text-right">
+                        <p className="text-sm font-black text-slate-700 leading-none uppercase tracking-wide">Alex Merchant</p>
+                        <p className="text-[10px] text-amber-500 uppercase font-black mt-2 tracking-[0.2em] opacity-80">PRO Admin</p>
+                      </div>
+                      <div className="w-12 h-12 rounded-2xl purple-gradient-btn gold-border-glow flex items-center justify-center text-white shadow-2xl">
+                        <User size={24} />
+                      </div>
+                    </div>
+                  </div>
+                </header>
+
+                <main className="p-12 pb-24">
+                  <Routes>
+                    <Route path="/" element={<Dashboard projects={projects} />} />
+                    <Route path="/projects" element={<ProjectList projects={projects} onAdd={addProject} />} />
+                    <Route path="/projects/:id" element={<ProjectDetail projects={projects} onUpdate={updateProject} />} />
+                    <Route path="/analytics" element={<Analytics />} />
+                    <Route path="/settings" element={<Settings />} />
+                    {/* 商家后台专有功能 */}
+                    <Route path="/knowledge" element={<KnowledgeBase />} />
+                    <Route path="/search" element={<SmartSearch />} />
+                  </Routes>
+                </main>
+              </div>
+            </>
+          } />
         </Routes>
       </div>
     </Router>
