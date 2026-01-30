@@ -437,7 +437,14 @@ export class AIService {
   async connectToRealtime(callback: RealtimeCallback): Promise<boolean> {
     try {
       const key = this.getZhipuApiKey();
-      const endpoint = `wss://open.bigmodel.cn/api/paas/v4/realtime?model=${ZhipuModel.GLM_REALTIME}`;
+      if (!key) {
+        console.error('No API key available for GLM-Realtime');
+        callback({ error: 'No API key' }, 'status');
+        return false;
+      }
+      
+      // GLM-Realtime WebSocket连接，直接在URL中包含认证
+      const endpoint = `wss://open.bigmodel.cn/api/paas/v4/realtime?authorization=Bearer ${key}&model=${ZhipuModel.GLM_REALTIME}`;
       
       this.realtimeWebSocket = new WebSocket(endpoint);
       this.realtimeCallbacks.push(callback);
@@ -445,15 +452,6 @@ export class AIService {
       this.realtimeWebSocket.onopen = () => {
         console.log('GLM-Realtime connected');
         this.isRealtimeConnected = true;
-        
-        // 发送认证消息
-        this.realtimeWebSocket?.send(JSON.stringify({
-          type: 'auth',
-          data: {
-            token: key
-          }
-        }));
-        
         callback({ status: 'connected' }, 'status');
       };
       

@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>智谱AI功能测试</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 8px; }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        button { padding: 10px 15px; margin: 5px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        textarea { width: 100%; height: 100px; margin: 10px 0; }
+        .result { margin: 10px 0; padding: 10px; background: #f8f9fa; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <h1>🧪 智谱AI功能测试页面</h1>
+    <p>API密钥: a75d46768b0f45dc90a5969077ffc8d9.dT0t2tku3hZGfYkk</p>
+    
+    <div class="test-section">
+        <h3>🔤 文本对话测试</h3>
+        <textarea id="chatInput" placeholder="输入您的问题...">你好，请介绍一下智谱AI的主要功能</textarea>
+        <button onclick="testChat()">发送消息</button>
+        <div id="chatResult" class="result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h3>🔊 语音合成测试</h3>
+        <textarea id="ttsInput" placeholder="输入要合成的文字...">您好，这是智谱AI语音合成功能测试</textarea>
+        <select id="voiceSelect">
+            <option value="tongtong">通通(女声)</option>
+            <option value="zhangsan">张三(男声)</option>
+            <option value="lisi">李四(男声)</option>
+        </select>
+        <button onclick="testTTS()">生成语音</button>
+        <button onclick="playAudio()" id="playBtn" disabled>播放音频</button>
+        <div id="ttsResult" class="result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h3>🧠 向量嵌入测试</h3>
+        <textarea id="embeddingInput" placeholder="输入要向量化的文本...">智能客服系统可以帮助用户解决各种问题</textarea>
+        <button onclick="testEmbedding()">生成向量</button>
+        <div id="embeddingResult" class="result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h3>👁️ 多模态分析测试</h3>
+        <input type="file" id="imageInput" accept="image/*">
+        <button onclick="testVision()">分析图片</button>
+        <div id="visionResult" class="result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h3>📊 测试结果汇总</h3>
+        <div id="summary" class="result">
+            <p>点击上方按钮开始测试各项功能...</p>
+        </div>
+    </div>
+
+    <script>
+        const API_KEY = 'a75d46768b0f45dc90a5969077ffc8d9.dT0t2tku3hZGfYkk';
+        const BASE_URL = 'https://open.bigmodel.cn/api/paas/v4';
+        let audioData = null;
+        let testResults = {
+            chat: false,
+            tts: false,
+            embedding: false,
+            vision: false
+        };
+
+        async function testChat() {
+            const input = document.getElementById('chatInput').value;
+            const resultDiv = document.getElementById('chatResult');
+            resultDiv.innerHTML = '🔄 正在处理...';
+            
+            try {
+                const response = await fetch(`${BASE_URL}/chat/completions`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${API_KEY}`,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        model: 'glm-4.7',
+                        messages: [{ role: 'user', content: input }],
+                        temperature: 0.1,
+                        max_tokens: 200
+                    })
+                });
+                
+                const data = await response.json();
+                if (response.ok) {
+                    resultDiv.innerHTML = `✅ <strong>回复:</strong> ${data.choices[0].message.content}`;
+                    resultDiv.className = 'result success';
+                    testResults.chat = true;
+                } else {
+                    resultDiv.innerHTML = `❌ <strong>错误:</strong> ${JSON.stringify(data)}`;
+                    resultDiv.className = 'result error';
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `❌ <strong>网络错误:</strong> ${error.message}`;
+                resultDiv.className = 'result error';
+            }
+            updateSummary();
+        }
+
+        async function testTTS() {
+            const input = document.getElementById('ttsInput').value;
+            const voice = document.getElementById('voiceSelect').value;
+            const resultDiv = document.getElementById('ttsResult');
+            resultDiv.innerHTML = '🔄 正在生成语音...';
+            
+            try {
+                const response = await fetch(`${BASE_URL}/audio/speech`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${API_KEY}`,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        model: 'glm-tts',
+                        input: input,
+                        voice: voice,
+                        response_format: 'wav'
+                    })
+                });
+                
+                if (response.ok) {
+                    const arrayBuffer = await response.arrayBuffer();
+                    const blob = new Blob([arrayBuffer], { type: 'audio/wav' });
+                    audioData = URL.createObjectURL(blob);
+                    
+                    resultDiv.innerHTML = `✅ <strong>语音生成成功!</strong> 音频大小: ${arrayBuffer.byteLength} bytes`;
+                    resultDiv.className = 'result success';
+                    document.getElementById('playBtn').disabled = false;
+                    testResults.tts = true;
+                } else {
+                    const error = await response.json();
+                    resultDiv.innerHTML = `❌ <strong>错误:</strong> ${JSON.stringify(error)}`;
+                    resultDiv.className = 'result error';
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `❌ <strong>网络错误:</strong> ${error.message}`;
+                resultDiv.className = 'result error';
+            }
+            updateSummary();
+        }
+
+        function playAudio() {
+            if (audioData) {
+                const audio = new Audio(audioData);
+                audio.play();
+            }
+        }
+
+        async function testEmbedding() {
+            const input = document.getElementById('embeddingInput').value;
+            const resultDiv = document.getElementById('embeddingResult');
+            resultDiv.innerHTML = '🔄 正在生成向量...';
+            
+            try {
+                const response = await fetch(`${BASE_URL}/embeddings`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${API_KEY}`,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        model: 'embedding-3',
+                        input: [input],
+                        dimensions: 768
+                    })
+                });
+                
+                const data = await response.json();
+                if (response.ok) {
+                    const vector = data.data[0].embedding;
+                    resultDiv.innerHTML = `✅ <strong>向量生成成功!</strong> 维度: ${vector.length}, 前5个值: [${vector.slice(0, 5).map(v => v.toFixed(4)).join(', ')}...]`;
+                    resultDiv.className = 'result success';
+                    testResults.embedding = true;
+                } else {
+                    resultDiv.innerHTML = `❌ <strong>错误:</strong> ${JSON.stringify(data)}`;
+                    resultDiv.className = 'result error';
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `❌ <strong>网络错误:</strong> ${error.message}`;
+                resultDiv.className = 'result error';
+            }
+            updateSummary();
+        }
+
+        async function testVision() {
+            const fileInput = document.getElementById('imageInput');
+            const resultDiv = document.getElementById('visionResult');
+            
+            if (!fileInput.files[0]) {
+                resultDiv.innerHTML = '❌ 请先选择一张图片';
+                resultDiv.className = 'result error';
+                return;
+            }
+            
+            resultDiv.innerHTML = '🔄 正在分析图片...';
+            
+            try {
+                const file = fileInput.files[0];
+                const base64 = await fileToBase64(file);
+                
+                const response = await fetch(`${BASE_URL}/chat/completions`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${API_KEY}`,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        model: 'glm-4.6v',
+                        messages: [{
+                            role: 'user',
+                            content: [
+                                { type: 'text', text: '请详细描述这张图片的内容' },
+                                { type: 'image_url', image_url: { url: base64 } }
+                            ]
+                        }],
+                        temperature: 0.1,
+                        max_tokens: 300
+                    })
+                });
+                
+                const data = await response.json();
+                if (response.ok) {
+                    resultDiv.innerHTML = `✅ <strong>图片分析结果:</strong> ${data.choices[0].message.content}`;
+                    resultDiv.className = 'result success';
+                    testResults.vision = true;
+                } else {
+                    resultDiv.innerHTML = `❌ <strong>错误:</strong> ${JSON.stringify(data)}`;
+                    resultDiv.className = 'result error';
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `❌ <strong>网络错误:</strong> ${error.message}`;
+                resultDiv.className = 'result error';
+            }
+            updateSummary();
+        }
+
+        function fileToBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = () => resolve(reader.result);
+                reader.onerror = error => reject(error);
+            });
+        }
+
+        function updateSummary() {
+            const successCount = Object.values(testResults).filter(Boolean).length;
+            const totalCount = Object.keys(testResults).length;
+            const summaryDiv = document.getElementById('summary');
+            
+            let html = `<h4>测试进度: ${successCount}/${totalCount}</h4>`;
+            html += `<p>文本对话: ${testResults.chat ? '✅' : '⏳'}</p>`;
+            html += `<p>语音合成: ${testResults.tts ? '✅' : '⏳'}</p>`;
+            html += `<p>向量嵌入: ${testResults.embedding ? '✅' : '⏳'}</p>`;
+            html += `<p>多模态分析: ${testResults.vision ? '✅' : '⏳'}</p>`;
+            
+            if (successCount === totalCount) {
+                html += `<p style="color: green; font-weight: bold;">🎉 所有功能测试通过！</p>`;
+                summaryDiv.className = 'result success';
+            } else {
+                summaryDiv.className = 'result';
+            }
+            
+            summaryDiv.innerHTML = html;
+        }
+    </script>
+</body>
+</html>

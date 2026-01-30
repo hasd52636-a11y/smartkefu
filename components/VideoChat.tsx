@@ -57,6 +57,12 @@ const VideoChat: React.FC<{ projects: ProductProject[] }> = ({ projects }) => {
   
   // 初始化
   useEffect(() => {
+    // 加载保存的API密钥
+    const savedApiKey = localStorage.getItem('zhipuApiKey');
+    if (savedApiKey) {
+      aiService.setZhipuApiKey(savedApiKey);
+    }
+    
     if (project) {
       initializeVideoChat();
     }
@@ -101,6 +107,14 @@ const VideoChat: React.FC<{ projects: ProductProject[] }> = ({ projects }) => {
   
   // 连接到GLM-Realtime
   const connectToRealtime = async () => {
+    // 检查API密钥
+    const savedApiKey = localStorage.getItem('zhipuApiKey');
+    if (!savedApiKey) {
+      console.error('No API key found');
+      setConnectionStatus('error');
+      return;
+    }
+    
     const callback: RealtimeCallback = (data, type) => {
       switch (type) {
         case 'status':
@@ -151,12 +165,33 @@ const VideoChat: React.FC<{ projects: ProductProject[] }> = ({ projects }) => {
           
           // 绘制标注
           drawAnnotations(ctx);
+          
+          // 每隔一定时间发送视频帧到GLM-Realtime（降低频率以节省带宽）
+          if (animationFrameRef.current && animationFrameRef.current % 30 === 0) {
+            sendVideoFrame();
+          }
         }
       }
       animationFrameRef.current = requestAnimationFrame(render);
     };
     
     animationFrameRef.current = requestAnimationFrame(render);
+  };
+  
+  // 发送视频帧
+  const sendVideoFrame = () => {
+    if (canvasRef.current && isConnected) {
+      canvasRef.current.toBlob((blob) => {
+        if (blob) {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const base64 = (reader.result as string).split(',')[1];
+            aiService.sendVideoFrame(base64);
+          };
+          reader.readAsDataURL(blob);
+        }
+      }, 'image/jpeg', 0.8);
+    }
   };
   
   // 绘制标注

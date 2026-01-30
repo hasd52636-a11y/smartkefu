@@ -25,6 +25,14 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, onUpdate }) => 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
 
+  useEffect(() => {
+    // 加载保存的API密钥
+    const savedApiKey = localStorage.getItem('zhipuApiKey');
+    if (savedApiKey) {
+      aiService.setZhipuApiKey(savedApiKey);
+    }
+  }, []);
+
   if (!localProject) return <div className="p-10 text-slate-800 font-bold text-center">Project not found</div>;
 
   const handleSave = () => {
@@ -81,7 +89,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, onUpdate }) => 
     reader.readAsDataURL(file);
   };
 
-  const productGuideUrl = `${window.location.origin}/#/view/${id}`;
+  const productGuideUrl = `${window.location.protocol}//${window.location.hostname}:3000/#/view/${id}`;
   const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(productGuideUrl)}&color=7c3aed&bgcolor=ffffff`;
 
   return (
@@ -460,10 +468,27 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, onUpdate }) => 
                     <div className="flex items-center gap-2">
                       <button 
                         onClick={async () => {
-                          const audioData = await aiService.generateSpeech('您好，这是一个语音示例', localProject.config.voiceName, localProject.config.provider);
-                          if (audioData) {
-                            const audio = new Audio(`data:audio/wav;base64,${audioData}`);
-                            audio.play();
+                          try {
+                            // 检查API密钥
+                            const savedApiKey = localStorage.getItem('zhipuApiKey');
+                            if (!savedApiKey) {
+                              alert('请先在设置页面配置智谱AI密钥');
+                              return;
+                            }
+                            
+                            // 确保API密钥已设置到服务中
+                            aiService.setZhipuApiKey(savedApiKey);
+                            
+                            const audioData = await aiService.generateSpeech('您好，这是一个语音示例', localProject.config.voiceName, localProject.config.provider);
+                            if (audioData) {
+                              const audio = new Audio(`data:audio/wav;base64,${audioData}`);
+                              audio.play();
+                            } else {
+                              alert('语音生成失败，请检查API密钥是否正确');
+                            }
+                          } catch (error) {
+                            console.error('语音预览失败:', error);
+                            alert('语音预览失败: ' + (error instanceof Error ? error.message : '未知错误'));
                           }
                         }}
                         className="px-4 py-2 bg-amber-500 text-black font-bold rounded-xl text-xs hover:bg-amber-400 transition-all"

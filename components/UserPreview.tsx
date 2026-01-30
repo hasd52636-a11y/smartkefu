@@ -10,8 +10,8 @@ import {
 import { aiService, RealtimeCallback, Annotation } from '../services/aiService';
 
 const UserPreview: React.FC<{ projects: ProductProject[] }> = ({ projects }) => {
-  const { id } = useParams();
-  const project = projects.find(p => p.id === id);
+  const { projectId } = useParams();
+  const project = projects.find(p => p.id === projectId);
   
   // 处理项目不存在的情况
   if (!project) {
@@ -127,6 +127,14 @@ const UserPreview: React.FC<{ projects: ProductProject[] }> = ({ projects }) => 
     return () => {
       cleanupVideoChat();
     };
+  }, []);
+
+  // 加载保存的API密钥
+  useEffect(() => {
+    const savedApiKey = localStorage.getItem('zhipuApiKey');
+    if (savedApiKey) {
+      aiService.setZhipuApiKey(savedApiKey);
+    }
   }, []);
 
   if (!project) return <div className="p-10 text-center text-white bg-slate-900 h-screen flex items-center justify-center">Invalid Project</div>;
@@ -402,6 +410,14 @@ const UserPreview: React.FC<{ projects: ProductProject[] }> = ({ projects }) => 
     setIsTyping(true);
 
     try {
+      // 检查API密钥是否已在Settings中配置
+      const savedApiKey = localStorage.getItem('zhipuApiKey');
+      if (!savedApiKey || savedApiKey === 'your_zhipu_api_key_here') {
+        setMessages(prev => [...prev, { role: 'assistant', text: "请先在设置页面配置智谱AI密钥后再使用AI功能。" }]);
+        setIsTyping(false);
+        return;
+      }
+
       if (image) {
         if (!project.config.multimodalEnabled) {
           setMessages(prev => [...prev, { role: 'assistant', text: "多模态分析功能已禁用，无法分析图片内容。" }]);
@@ -495,10 +511,22 @@ const UserPreview: React.FC<{ projects: ProductProject[] }> = ({ projects }) => 
   };
 
   const playTTS = async (text: string) => {
-    const audioData = await aiService.generateSpeech(text, project.config.voiceName || 'Kore', project.config.provider);
-    if (audioData) {
-      const audio = new Audio(`data:audio/wav;base64,${audioData}`);
-      audio.play();
+    try {
+      // 确保使用保存的API密钥
+      const savedApiKey = localStorage.getItem('zhipuApiKey');
+      if (savedApiKey) {
+        aiService.setZhipuApiKey(savedApiKey);
+      }
+      
+      const audioData = await aiService.generateSpeech(text, project.config.voiceName || 'tongtong', project.config.provider);
+      if (audioData) {
+        const audio = new Audio(`data:audio/wav;base64,${audioData}`);
+        audio.play();
+      } else {
+        console.error('语音生成失败');
+      }
+    } catch (error) {
+      console.error('TTS播放失败:', error);
     }
   };
 
