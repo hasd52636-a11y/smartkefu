@@ -81,7 +81,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, onUpdate }) => 
     reader.readAsDataURL(file);
   };
 
-  const productGuideUrl = `${window.location.origin}${window.location.pathname}#/view/${id}`;
+  const productGuideUrl = `${window.location.origin}/#/view/${id}`;
   const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(productGuideUrl)}&color=7c3aed&bgcolor=ffffff`;
 
   return (

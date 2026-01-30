@@ -93,6 +93,31 @@ const App: React.FC = () => {
   // 静态默认项目数据，确保部署后用户扫码能找到项目
   const defaultProjects: ProductProject[] = [
     {
+      id: 'p1',
+      name: '测试项目',
+      description: '用于测试扫码功能的项目。',
+      status: ProjectStatus.ACTIVE,
+      config: {
+        provider: AIProvider.ZHIPU,
+        voiceName: 'tongtong',
+        visionEnabled: true,
+        visionPrompt: 'Check if all cables are plugged in and the LED is glowing green.',
+        systemInstruction: 'You are a helpful product assistant.',
+        videoGuides: [],
+        multimodalEnabled: true,
+        videoChatEnabled: true,
+        videoChatPrompt: 'Analyze the user\'s video and provide technical support based on the product knowledge base.',
+        avatarEnabled: true,
+        annotationEnabled: true
+      },
+      knowledgeBase: [
+        { id: 'k1', title: '使用说明', type: 'text' as any, content: '这是一个测试项目，用于验证扫码功能是否正常工作。', createdAt: new Date().toISOString() },
+        { id: 'k2', title: '测试内容', type: 'text' as any, content: '扫码成功！您可以开始使用AI虚拟客服功能了。', createdAt: new Date().toISOString() }
+      ],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    },
+    {
       id: 'proj_1',
       name: 'SmartHome Pro Hub',
       description: 'Next-gen automation controller for modern homes. 下一代智能家居控制器。',
@@ -252,8 +277,6 @@ const App: React.FC = () => {
                     {/* 商家后台专有功能 */}
                     <Route path="/knowledge" element={<KnowledgeBase />} />
                     <Route path="/search" element={<SmartSearch />} />
-                    {/* 用户扫码查看路径 */}
-                    <Route path="/view/:id" element={<UserPreview projects={projects} />} />
                   </Routes>
                 </main>
               </div>
