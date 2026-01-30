@@ -1,11 +1,12 @@
 
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ProductProject, ProjectStatus, KnowledgeType, KnowledgeItem, AIProvider, VideoGuide } from '../types';
 import { 
   ArrowLeft, Save, Trash2, Plus, FileText, Mic, QrCode, Settings,
   ShieldCheck, Video, Globe, Sparkles, Play, Info, Download, 
-  ExternalLink, Copy, Upload, FileUp, X, CheckCircle
+  ExternalLink, Copy, Upload, FileUp, X, CheckCircle, Volume2,
+  Send
 } from 'lucide-react';
 import { aiService } from '../services/aiService';
 
@@ -24,7 +25,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, onUpdate }) => 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoInputRef = useRef<HTMLInputElement>(null);
 
-  if (!localProject) return <div className="p-10 text-white font-bold text-center">Project not found</div>;
+  if (!localProject) return <div className="p-10 text-slate-800 font-bold text-center">Project not found</div>;
 
   const handleSave = () => {
     onUpdate(localProject);
@@ -93,7 +94,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, onUpdate }) => 
           <div>
             <h1 className="text-3xl font-black text-slate-800 tracking-tight">{localProject.name}</h1>
             <p className="text-slate-600 font-medium flex items-center gap-2 mt-1">
-              {localProject.config.provider === AIProvider.ZHIPU ? <><Sparkles size={14} className="text-red-500" /> Zhipu GLM Cluster</> : <><Globe size={14} className="text-blue-500" /> Gemini Ultra Node</>}
+              <><Sparkles size={14} className="text-red-500" /> Zhipu GLM Cluster</>
             </p>
           </div>
         </div>
@@ -153,12 +154,12 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, onUpdate }) => 
 
           {activeTab === 'video' && (
             <div className="space-y-10">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="glass-card p-8 rounded-[3rem] border border-white/10 flex flex-col justify-between group">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                <div className="glass-card p-8 rounded-[3rem] border border-slate-200 flex flex-col justify-between group">
                   <div>
                     <Sparkles className="text-violet-500 mb-6" size={32} />
-                    <h4 className="text-xl font-bold text-white">AI 智能合成 Video AI</h4>
-                    <p className="text-sm text-slate-400 mt-2">基于产品描述自动生成虚拟引导视频。</p>
+                    <h4 className="text-xl font-bold text-slate-800">AI 智能合成 Video AI</h4>
+                    <p className="text-sm text-slate-600 mt-2">基于产品描述自动生成虚拟引导视频。</p>
                   </div>
                   <button 
                     disabled={isGeneratingVideo}
@@ -179,22 +180,182 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, onUpdate }) => 
                   </button>
                 </div>
 
-                <div className="glass-card p-8 rounded-[3rem] border border-white/10 flex flex-col justify-between group">
+                <div className="glass-card p-8 rounded-[3rem] border border-slate-200 flex flex-col justify-between group">
                   <div>
                     <Upload className="text-amber-500 mb-6" size={32} />
-                    <h4 className="text-xl font-bold text-white">商家专业上传 Upload</h4>
-                    <p className="text-sm text-slate-400 mt-2">上传 100% 准确的实拍安装视频（推荐）。</p>
+                    <h4 className="text-xl font-bold text-slate-800">商家专业上传 Upload</h4>
+                    <p className="text-sm text-slate-600 mt-2">上传 100% 准确的实拍安装视频（推荐）。</p>
                   </div>
                   <button onClick={() => videoInputRef.current?.click()} className="mt-8 py-4 bg-amber-500/10 text-amber-500 border border-amber-500/20 rounded-2xl font-black text-xs uppercase hover:bg-amber-500 hover:text-slate-900 transition-all">
                     Upload MP4/MOV
                   </button>
                   <input type="file" ref={videoInputRef} onChange={handleManualVideoUpload} accept="video/*" className="hidden" />
                 </div>
+
+                <div className={`glass-card p-8 rounded-[3rem] border ${localProject.config.multimodalEnabled ? 'border-slate-200' : 'border-slate-300 opacity-70'} flex flex-col justify-between group`}>
+                  <div>
+                    <Video className={`${localProject.config.multimodalEnabled ? 'text-red-500' : 'text-slate-400'} mb-6`} size={32} />
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="text-xl font-bold text-slate-800">多模态分析 AI</h4>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input 
+                          type="checkbox" 
+                          className="sr-only peer" 
+                          checked={localProject.config.multimodalEnabled}
+                          onChange={(e) => {
+                            setLocalProject({
+                              ...localProject,
+                              config: {
+                                ...localProject.config,
+                                multimodalEnabled: e.target.checked
+                              }
+                            });
+                          }}
+                        />
+                        <div className="w-10 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-red-500/50 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-red-500"></div>
+                      </label>
+                    </div>
+                    <p className="text-sm text-slate-600 mt-2">智能分析视频、音频内容，提取关键信息。</p>
+                    {!localProject.config.multimodalEnabled && (
+                      <p className="text-sm text-amber-500 mt-2 font-medium">功能已禁用</p>
+                    )}
+                  </div>
+                  <button 
+                    onClick={async () => {
+                      if (!localProject.config.multimodalEnabled) {
+                        alert('多模态分析功能已禁用，请先启用该功能');
+                        return;
+                      }
+                      if (localProject.config.videoGuides.length === 0) {
+                        alert('请先上传视频或生成视频指南');
+                        return;
+                      }
+                      alert('正在分析视频内容，请稍候...');
+                      try {
+                        // 获取第一个视频的URL
+                        const firstVideo = localProject.config.videoGuides[0];
+                        // 调用多模态分析API
+                        const analysisResult = await aiService.analyzeMultimodal(
+                          [
+                            { type: 'text', text: '分析这个视频的内容，提取关键信息和步骤' },
+                            { type: 'image_url', image_url: { url: firstVideo.url } }
+                          ],
+                          localProject.config.provider
+                        );
+                        alert('分析结果：\n' + analysisResult);
+                      } catch (error) {
+                        console.error('多模态分析失败:', error);
+                        alert('多模态分析失败，请检查API密钥是否正确');
+                      }
+                    }}
+                    disabled={!localProject.config.multimodalEnabled}
+                    className={`mt-8 py-4 ${localProject.config.multimodalEnabled ? 'bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500 hover:text-white' : 'bg-slate-200 text-slate-500 border border-slate-300 cursor-not-allowed'} rounded-2xl font-black text-xs uppercase transition-all`}
+                  >
+                    {localProject.config.multimodalEnabled ? 'Start Analysis' : 'Disabled'}
+                  </button>
+                </div>
+                
+                <div className={`glass-card p-8 rounded-[3rem] border ${localProject.config.videoChatEnabled ? 'border-slate-200' : 'border-slate-300 opacity-70'} flex flex-col justify-between group`}>
+                  <div>
+                    <Video className={`${localProject.config.videoChatEnabled ? 'text-violet-500' : 'text-slate-400'} mb-6`} size={32} />
+                    <div className="flex items-center justify-between mb-6">
+                      <h4 className="text-xl font-bold text-slate-800">视频客服 AI</h4>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input 
+                          type="checkbox" 
+                          className="sr-only peer" 
+                          checked={localProject.config.videoChatEnabled}
+                          onChange={(e) => {
+                            setLocalProject({
+                              ...localProject,
+                              config: {
+                                ...localProject.config,
+                                videoChatEnabled: e.target.checked
+                              }
+                            });
+                          }}
+                        />
+                        <div className="w-10 h-5 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-violet-500/50 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-violet-500"></div>
+                      </label>
+                    </div>
+                    
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">视频分析提示词</label>
+                        <textarea 
+                          value={localProject.config.videoChatPrompt}
+                          onChange={(e) => {
+                            setLocalProject({
+                              ...localProject,
+                              config: {
+                                ...localProject.config,
+                                videoChatPrompt: e.target.value
+                              }
+                            });
+                          }}
+                          className="w-full bg-slate-100 border border-slate-200 rounded-xl px-4 py-3 text-sm text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-violet-500/50 focus:border-violet-500/30 transition-all h-32 resize-none"
+                          placeholder="Analyze the user's video and provide technical support based on the product knowledge base."
+                        />
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label className="flex items-center justify-between text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                            启用虚拟人
+                            <label className="relative inline-flex items-center cursor-pointer">
+                              <input 
+                                type="checkbox" 
+                                className="sr-only peer" 
+                                checked={localProject.config.avatarEnabled}
+                                onChange={(e) => {
+                                  setLocalProject({
+                                    ...localProject,
+                                    config: {
+                                      ...localProject.config,
+                                      avatarEnabled: e.target.checked
+                                    }
+                                  });
+                                }}
+                              />
+                              <div className="w-8 h-4 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-violet-500/50 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[1px] after:left-[1px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-violet-500"></div>
+                            </label>
+                          </label>
+                        </div>
+                        <div>
+                          <label className="flex items-center justify-between text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                            启用标注工具
+                            <label className="relative inline-flex items-center cursor-pointer">
+                              <input 
+                                type="checkbox" 
+                                className="sr-only peer" 
+                                checked={localProject.config.annotationEnabled}
+                                onChange={(e) => {
+                                  setLocalProject({
+                                    ...localProject,
+                                    config: {
+                                      ...localProject.config,
+                                      annotationEnabled: e.target.checked
+                                    }
+                                  });
+                                }}
+                              />
+                              <div className="w-8 h-4 bg-slate-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-violet-500/50 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[1px] after:left-[1px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-violet-500"></div>
+                            </label>
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {!localProject.config.videoChatEnabled && (
+                      <p className="text-sm text-amber-500 mt-4 font-medium">功能已禁用</p>
+                    )}
+                  </div>
+                </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {localProject.config.videoGuides.map(v => (
-                  <div key={v.id} className="relative aspect-video rounded-2xl overflow-hidden border border-white/10 group bg-black/40">
+                  <div key={v.id} className="relative aspect-video rounded-2xl overflow-hidden border border-slate-200 group bg-black/40">
                     {v.type === 'upload' ? (
                       <video src={v.url} className="w-full h-full object-cover" />
                     ) : (
@@ -223,13 +384,29 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, onUpdate }) => 
                  <h3 className="text-3xl font-black text-slate-800">产品“数字身份证”</h3>
                  <p className="text-slate-600 font-medium">该二维码直接链接到产品的 RAG 知识库与视觉 AI 节点。印刷在包装上后，用户可获得实时的精准售后支持。</p>
                  <div className="flex gap-4">
-                    <button className="px-8 py-3.5 gold-gradient-btn text-slate-900 font-black rounded-2xl text-sm flex items-center gap-2">
-                       <Download size={20}/> Download PNG
-                    </button>
-                    <button onClick={() => window.open(`#/view/${id}`, '_blank')} className="px-8 py-3.5 bg-slate-100 border border-slate-200 text-slate-800 font-black rounded-2xl text-sm">
-                       Preview 预览
-                    </button>
-                 </div>
+                   <button onClick={async () => {
+                     try {
+                       const response = await fetch(qrImageUrl);
+                       const blob = await response.blob();
+                       const url = window.URL.createObjectURL(blob);
+                       const a = document.createElement('a');
+                       a.href = url;
+                       a.download = `${localProject.name}_qrcode.png`;
+                       document.body.appendChild(a);
+                       a.click();
+                       window.URL.revokeObjectURL(url);
+                       document.body.removeChild(a);
+                     } catch (error) {
+                       console.error('Failed to download QR code:', error);
+                       alert('Failed to download QR code. Please try again.');
+                     }
+                   }} className="px-8 py-3.5 gold-gradient-btn text-slate-900 font-black rounded-2xl text-sm flex items-center gap-2">
+                      <Download size={20}/> Download PNG
+                   </button>
+                   <button onClick={() => window.open(`#/view/${id}`, '_blank')} className="px-8 py-3.5 bg-slate-100 border border-slate-200 text-slate-800 font-black rounded-2xl text-sm">
+                      Preview 预览
+                   </button>
+                </div>
                </div>
              </div>
           )}
@@ -242,7 +419,59 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, onUpdate }) => 
                  <StatusRow label="Embedding Node" value="ACTIVE" color="text-emerald-600" />
                  <StatusRow label="Vector Index" value={`${localProject.knowledgeBase.length} Chunks`} />
                  <StatusRow label="Rerank Model" value="Enabled" />
-                 <StatusRow label="TTS Provider" value={localProject.config.provider === AIProvider.ZHIPU ? 'Zhipu GLM' : 'Gemini'} />
+                 <StatusRow label="TTS Provider" value="Zhipu GLM" />
+              </div>
+           </div>
+           
+           <div className="glass-card p-8 rounded-[3rem] border border-slate-200">
+              <h4 className="text-slate-800 font-bold mb-6 flex items-center gap-2"><Volume2 size={20} className="text-amber-500"/> 语音设置</h4>
+              <div className="space-y-5">
+                 <div className="flex justify-between items-center">
+                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">音色选择</span>
+                    <select 
+                      value={localProject.config.voiceName}
+                      onChange={(e) => {
+                        setLocalProject({
+                          ...localProject,
+                          config: {
+                            ...localProject.config,
+                            voiceName: e.target.value
+                          }
+                        });
+                      }}
+                      className="px-4 py-2 bg-slate-100 border border-slate-200 rounded-xl text-sm text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/30 transition-all"
+                    >
+                      {/* 普通话 */}
+                      <option value="zhangsan">普通话-男声 (zhangsan)</option>
+                      <option value="lisi">普通话-男声 (lisi)</option>
+                      <option value="tongtong">普通话-女声 (tongtong)</option>
+                      <option value="yina">普通话-女声 (yina)</option>
+                      <option value="xiaohong">普通话-女声 (xiaohong)</option>
+                      <option value="xiaoli">普通话-女声 (xiaoli)</option>
+                      {/* 方言 */}
+                      <option value="wangwu">四川话 (wangwu)</option>
+                      <option value="daming">粤语 (daming)</option>
+                      <option value="laowang">东北话 (laowang)</option>
+                      <option value="xiaozhang">方言-通用 (xiaozhang)</option>
+                    </select>
+                 </div>
+                 <div className="flex justify-between items-center">
+                    <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">语音合成</span>
+                    <div className="flex items-center gap-2">
+                      <button 
+                        onClick={async () => {
+                          const audioData = await aiService.generateSpeech('您好，这是一个语音示例', localProject.config.voiceName, localProject.config.provider);
+                          if (audioData) {
+                            const audio = new Audio(`data:audio/wav;base64,${audioData}`);
+                            audio.play();
+                          }
+                        }}
+                        className="px-4 py-2 bg-amber-500 text-black font-bold rounded-xl text-xs hover:bg-amber-400 transition-all"
+                      >
+                        预览音色
+                      </button>
+                    </div>
+                 </div>
               </div>
            </div>
         </div>

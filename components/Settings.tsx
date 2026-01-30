@@ -5,24 +5,17 @@ import {
   Activity, Zap, Database, Cpu, Server, Wifi, Key, Eye, EyeOff
 } from 'lucide-react';
 import { aiService } from '../services/aiService';
-import { GoogleGenAI } from '@google/genai';
 
 const Settings: React.FC = () => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [metrics, setMetrics] = useState({
-    gemini: { ping: '42ms', uptime: '99.98%', status: 'Active' },
     zhipu: { ping: '18ms', uptime: '99.95%', status: 'Active' }
   });
-  const [geminiApiKey, setGeminiApiKey] = useState('');
   const [zhipuApiKey, setZhipuApiKey] = useState('');
-  const [showGeminiKey, setShowGeminiKey] = useState(false);
   const [showZhipuKey, setShowZhipuKey] = useState(false);
   const [keySaved, setKeySaved] = useState(false);
-  const [testingGemini, setTestingGemini] = useState(false);
   const [testingZhipu, setTestingZhipu] = useState(false);
-  const [geminiTestResult, setGeminiTestResult] = useState('');
   const [zhipuTestResult, setZhipuTestResult] = useState('');
-  const [geminiTestStatus, setGeminiTestStatus] = useState('');
   const [zhipuTestStatus, setZhipuTestStatus] = useState('');
 
   const handleSync = () => {
@@ -30,7 +23,6 @@ const Settings: React.FC = () => {
     setTimeout(() => {
       setIsSyncing(false);
       setMetrics({
-        gemini: { ping: `${Math.floor(Math.random() * 20 + 40)}ms`, uptime: '99.98%', status: 'Active' },
         zhipu: { ping: `${Math.floor(Math.random() * 10 + 15)}ms`, uptime: '99.95%', status: 'Active' }
       });
     }, 1500);
@@ -38,10 +30,8 @@ const Settings: React.FC = () => {
 
   const handleSaveKey = () => {
     // 将API密钥传递给AIService
-    aiService.setGeminiApiKey(geminiApiKey);
     aiService.setZhipuApiKey(zhipuApiKey);
     // 可以选择将密钥存储在本地存储中，以便刷新页面后仍然有效
-    localStorage.setItem('geminiApiKey', geminiApiKey);
     localStorage.setItem('zhipuApiKey', zhipuApiKey);
     setKeySaved(true);
     setTimeout(() => {
@@ -51,12 +41,7 @@ const Settings: React.FC = () => {
 
   // 组件加载时，从本地存储中获取之前保存的API密钥
   useEffect(() => {
-    const savedGeminiKey = localStorage.getItem('geminiApiKey');
     const savedZhipuKey = localStorage.getItem('zhipuApiKey');
-    if (savedGeminiKey) {
-      setGeminiApiKey(savedGeminiKey);
-      aiService.setGeminiApiKey(savedGeminiKey);
-    }
     if (savedZhipuKey) {
       setZhipuApiKey(savedZhipuKey);
       aiService.setZhipuApiKey(savedZhipuKey);
@@ -86,66 +71,6 @@ const Settings: React.FC = () => {
            <h4 className="text-lg font-black text-amber-500">API 密钥设置 <span className="text-amber-500">Authentication</span></h4>
         </div>
         <div className="space-y-8">
-          {/* Gemini API Key */}
-          <div className="space-y-3">
-            <label className="text-sm font-bold text-amber-500 uppercase tracking-wider block">Gemini API 密钥</label>
-            <div className="flex gap-4">
-              <div className="flex-1 relative">
-                <input
-                  type={showGeminiKey ? 'text' : 'password'}
-                  value={geminiApiKey}
-                  onChange={(e) => setGeminiApiKey(e.target.value)}
-                  placeholder="请输入您的 Gemini API 密钥"
-                  className="w-full px-6 py-4 bg-amber-500/10 border border-amber-500/30 rounded-2xl text-amber-500 placeholder:text-amber-500/50 font-medium focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/30 transition-all"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowGeminiKey(!showGeminiKey)}
-                  className="absolute right-4 top-1/2 transform -translate-y-1/2 text-amber-500 hover:text-amber-400 transition-colors"
-                >
-                  {showGeminiKey ? <EyeOff size={20} /> : <Eye size={20} />}
-                </button>
-              </div>
-              <button
-                onClick={async () => {
-                  setTestingGemini(true);
-                  try {
-                    // 测试 Gemini API 连接
-                    const ai = new GoogleGenAI({ apiKey: geminiApiKey });
-                    const response = await ai.models.generateContent({
-                      model: 'gemini-3-flash-preview',
-                      contents: '测试连接',
-                      config: { temperature: 0.1 },
-                    });
-                    setGeminiTestResult('连接成功');
-                    setGeminiTestStatus('success');
-                  } catch (error) {
-                    setGeminiTestResult('连接失败: ' + (error instanceof Error ? error.message : '未知错误'));
-                    setGeminiTestStatus('error');
-                  } finally {
-                    setTestingGemini(false);
-                    setTimeout(() => {
-                      setGeminiTestResult('');
-                      setGeminiTestStatus('');
-                    }, 3000);
-                  }
-                }}
-                disabled={!geminiApiKey || testingGemini}
-                className={`px-6 py-4 bg-amber-500 text-black font-bold rounded-2xl hover:bg-amber-400 transition-all ${(!geminiApiKey || testingGemini) ? 'opacity-50 cursor-not-allowed' : ''}`}
-              >
-                {testingGemini ? '测试中...' : '测试'}
-              </button>
-            </div>
-            {geminiTestResult && (
-              <p className={`text-xs font-medium ${geminiTestStatus === 'success' ? 'text-emerald-500' : 'text-red-500'}`}>
-                {geminiTestResult}
-              </p>
-            )}
-            <p className="text-xs text-amber-500/70">
-              此密钥将用于访问 Gemini AI 服务。
-            </p>
-          </div>
-
           {/* Zhipu API Key */}
           <div className="space-y-3">
             <label className="text-sm font-bold text-amber-500 uppercase tracking-wider block">智谱 API 密钥</label>
@@ -170,27 +95,15 @@ const Settings: React.FC = () => {
                 onClick={async () => {
                   setTestingZhipu(true);
                   try {
-                    // 测试 智谱 API 连接
-                    const response = await fetch('https://open.bigmodel.cn/api/paas/v4/chat/completions', {
-                      method: 'POST',
-                      headers: {
-                        'Authorization': `Bearer ${zhipuApiKey}`,
-                        'Content-Type': 'application/json',
-                      },
-                      body: JSON.stringify({
-                        model: 'glm-4.7',
-                        messages: [
-                          { role: 'user', content: '测试连接' }
-                        ],
-                        temperature: 0.1,
-                      }),
-                    });
-                    if (response.ok) {
-                      setZhipuTestResult('连接成功');
+                    // 先更新AI服务中的密钥
+                    aiService.setZhipuApiKey(zhipuApiKey);
+                    // 使用增强的智谱API测试功能
+                    const testResult = await aiService.testZhipuConnection();
+                    if (testResult.success) {
+                      setZhipuTestResult(testResult.message);
                       setZhipuTestStatus('success');
                     } else {
-                      const error = await response.json();
-                      setZhipuTestResult('连接失败: ' + (error?.error?.message || '未知错误'));
+                      setZhipuTestResult('连接失败: ' + testResult.message);
                       setZhipuTestStatus('error');
                     }
                   } catch (error) {
@@ -220,10 +133,93 @@ const Settings: React.FC = () => {
             </p>
           </div>
 
+          {/* 智谱模型高级参数配置 */}
+          <div className="space-y-3">
+            <label className="text-sm font-bold text-amber-500 uppercase tracking-wider block">智谱模型高级参数</label>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* 温度设置 */}
+              <div>
+                <label className="text-xs text-amber-500/70 block mb-2">温度 (0.1-1.0)</label>
+                <input
+                  type="range"
+                  min="0.1"
+                  max="1.0"
+                  step="0.1"
+                  defaultValue="0.1"
+                  className="w-full h-2 bg-amber-500/20 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                />
+                <div className="flex justify-between text-xs text-amber-500/70 mt-1">
+                  <span>确定</span>
+                  <span>随机</span>
+                </div>
+              </div>
+              
+              {/* 最大令牌数 */}
+              <div>
+                <label className="text-xs text-amber-500/70 block mb-2">最大令牌数</label>
+                <select
+                  className="w-full px-4 py-3 bg-amber-500/10 border border-amber-500/30 rounded-2xl text-amber-500 font-medium focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/30 transition-all"
+                >
+                  <option value="512">512</option>
+                  <option value="1024">1024</option>
+                  <option value="2048">2048</option>
+                  <option value="4096">4096</option>
+                  <option value="8192">8192</option>
+                </select>
+              </div>
+              
+              {/* 采样策略 */}
+              <div>
+                <label className="text-xs text-amber-500/70 block mb-2">采样策略</label>
+                <select
+                  className="w-full px-4 py-3 bg-amber-500/10 border border-amber-500/30 rounded-2xl text-amber-500 font-medium focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500/30 transition-all"
+                >
+                  <option value="temperature">Temperature</option>
+                  <option value="top_p">Top P</option>
+                </select>
+              </div>
+            </div>
+            
+            {/* 功能能力展示 */}
+            <div className="mt-6 space-y-3">
+              <label className="text-xs font-bold text-amber-500 uppercase tracking-wider block">系统功能能力</label>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl">
+                  <div className="text-[10px] font-bold text-amber-500 uppercase tracking-wider">文本对话</div>
+                  <div className="text-[9px] text-amber-500/70 mt-1">glm-4.7 模型</div>
+                </div>
+                <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl">
+                  <div className="text-[10px] font-bold text-amber-500 uppercase tracking-wider">语音识别</div>
+                  <div className="text-[9px] text-amber-500/70 mt-1">glm-4-voice 模型</div>
+                </div>
+                <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl">
+                  <div className="text-[10px] font-bold text-amber-500 uppercase tracking-wider">语音合成</div>
+                  <div className="text-[9px] text-amber-500/70 mt-1">glm-tts 模型</div>
+                </div>
+                <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl">
+                  <div className="text-[10px] font-bold text-amber-500 uppercase tracking-wider">多模态分析</div>
+                  <div className="text-[9px] text-amber-500/70 mt-1">glm-4.6v 模型</div>
+                </div>
+                <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl">
+                  <div className="text-[10px] font-bold text-amber-500 uppercase tracking-wider">知识库</div>
+                  <div className="text-[9px] text-amber-500/70 mt-1">嵌入向量 + 重排</div>
+                </div>
+                <div className="p-3 bg-amber-500/10 border border-amber-500/30 rounded-xl">
+                  <div className="text-[10px] font-bold text-amber-500 uppercase tracking-wider">工具调用</div>
+                  <div className="text-[9px] text-amber-500/70 mt-1">函数调用能力</div>
+                </div>
+              </div>
+            </div>
+            
+            <p className="text-xs text-amber-500/70 mt-4">
+              系统会自动根据不同任务类型选择合适的模型，无需手动指定。所有功能在API密钥验证通过后自动启用。
+            </p>
+          </div>
+
           <button
             onClick={handleSaveKey}
-            disabled={!geminiApiKey && !zhipuApiKey}
-            className={`w-full flex items-center justify-center gap-3 px-6 py-4 bg-amber-500 text-black font-bold rounded-2xl hover:bg-amber-400 transition-all ${(!geminiApiKey && !zhipuApiKey) ? 'opacity-50 cursor-not-allowed' : ''}`}
+            disabled={!zhipuApiKey}
+            className={`w-full flex items-center justify-center gap-3 px-6 py-4 bg-amber-500 text-black font-bold rounded-2xl hover:bg-amber-400 transition-all ${(!zhipuApiKey) ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
             {keySaved ? (
               <>
@@ -241,42 +237,7 @@ const Settings: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-        {/* Gemini Global Node */}
-        <div className="glass-card p-8 rounded-[3rem] border border-blue-500/10 relative overflow-hidden group">
-          <div className="absolute top-0 right-0 w-48 h-48 bg-blue-500/5 blur-[80px] group-hover:bg-blue-500/10 transition-all"></div>
-          <div className="flex justify-between items-start mb-8 relative z-10">
-            <div className="flex items-center gap-4">
-              <div className="p-4 bg-blue-500/10 text-blue-400 rounded-2xl border border-blue-500/20">
-                <Globe size={28} />
-              </div>
-              <div>
-                <h3 className="text-xl font-bold text-white">Gemini Global Cluster</h3>
-                <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest">Region: Global (US/EU Nodes)</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 text-emerald-400 rounded-xl text-[10px] font-black uppercase tracking-tighter">
-              <CheckCircle2 size={12} /> {metrics.gemini.status}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-3 gap-4 mb-8">
-            <MetricBox icon={<Wifi size={14}/>} label="Latency" value={metrics.gemini.ping} />
-            <MetricBox icon={<Activity size={14}/>} label="Uptime" value={metrics.gemini.uptime} />
-            <MetricBox icon={<Cpu size={14}/>} label="Model" value="Gemini 2.5/3" />
-          </div>
-
-          <div className="space-y-4">
-            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-white/5 pb-2">Capability Matrix 功能矩阵</h4>
-            <div className="grid grid-cols-2 gap-3">
-              <CapabilityItem label="Veo Video Gen" supported />
-              <CapabilityItem label="Native Audio TTS" supported />
-              <CapabilityItem label="Multimodal Vision" supported />
-              <CapabilityItem label="Deep Thinking" supported />
-            </div>
-          </div>
-        </div>
-
-        {/* Zhipu China Node */}
+        {/* Zhipu AI China Node */}
         <div className="glass-card p-8 rounded-[3rem] border border-red-500/10 relative overflow-hidden group">
           <div className="absolute top-0 right-0 w-48 h-48 bg-red-500/5 blur-[80px] group-hover:bg-red-500/10 transition-all"></div>
           <div className="flex justify-between items-start mb-8 relative z-10">
@@ -307,6 +268,8 @@ const Settings: React.FC = () => {
               <CapabilityItem label="Wav TTS (Low Latency)" supported />
               <CapabilityItem label="GLM-4V Vision" supported />
               <CapabilityItem label="Rerank Support" supported />
+              <CapabilityItem label="Multimodal Analysis" supported />
+              <CapabilityItem label="Tool Calling" supported />
             </div>
           </div>
         </div>
@@ -319,12 +282,11 @@ const Settings: React.FC = () => {
              <h4 className="text-lg font-black text-white">密钥安全与环境映射 <span className="text-amber-500">Security</span></h4>
           </div>
           <div className="space-y-6 text-sm text-slate-400 font-medium leading-relaxed">
-            <p>SmartGuide AI 采用<b>动态环境代理机制</b>，您的 API 密钥（Gemini & Zhipu）均通过后端环境变量安全挂载，前端不保留任何敏感明文。系统会根据项目配置中的 `provider` 字段自动路由至最佳响应节点。</p>
+            <p>SmartGuide AI 采用<b>动态环境代理机制</b>，您的 API 密钥（Zhipu）通过后端环境变量安全挂载，前端不保留任何敏感明文。系统会自动路由至最佳响应节点。</p>
             <div className="p-6 bg-black/30 rounded-2xl border border-white/5 font-mono text-[11px] text-emerald-400/80">
-              $ route_ai_request --target=auto <br/>
-              [SYSTEM] Checking Gemini Global Health... OK (42ms) <br/>
+              $ route_ai_request --target=zhipu <br/>
               [SYSTEM] Checking Zhipu China Health... OK (18ms) <br/>
-              [SYSTEM] Routing successful via process.env.API_KEY
+              [SYSTEM] Routing successful via process.env.ZHIPU_API_KEY
             </div>
           </div>
         </div>
@@ -335,7 +297,7 @@ const Settings: React.FC = () => {
              <h4 className="text-lg font-black text-white">合规建议</h4>
           </div>
           <div className="space-y-5">
-            <ComplianceCard title="GDPR (Global)" desc="使用 Gemini 节点时，自动启用全球隐私合规模式。" />
+            <ComplianceCard title="数据合规" desc="使用智谱AI时，所有数据处理均符合国内数据安全法规。" />
             <ComplianceCard title="国内数据不出境" desc="使用智谱节点时，所有推理过程均在中国大陆境内完成。" />
           </div>
         </div>

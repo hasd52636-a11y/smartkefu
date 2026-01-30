@@ -4,9 +4,10 @@ import { useParams } from 'react-router-dom';
 import { ProductProject, AIProvider, KnowledgeType } from '../types';
 import { 
   Mic, Send, Camera, Volume2, Video, X, Sparkles, Globe, Waves, 
-  PlayCircle, FileText, ChevronRight
+  PlayCircle, FileText, ChevronRight, Pencil, Circle, ArrowRight, Highlighter,
+  Upload, Image as ImageIcon, AlertCircle, CheckCircle, Loader2
 } from 'lucide-react';
-import { aiService } from '../services/aiService';
+import { aiService, RealtimeCallback, Annotation } from '../services/aiService';
 
 const UserPreview: React.FC<{ projects: ProductProject[] }> = ({ projects }) => {
   const { projectId } = useParams();
@@ -17,14 +18,322 @@ const UserPreview: React.FC<{ projects: ProductProject[] }> = ({ projects }) => 
   const [inputValue, setInputValue] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [activeVideo, setActiveVideo] = useState<string | null>(null);
+  const [streamingMessage, setStreamingMessage] = useState<string | null>(null);
+  const [streamingId, setStreamingId] = useState<number | null>(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
+  const [audioChunks, setAudioChunks] = useState<Blob[]>([]);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  
+  // OCR 状态
+  const [isOcrProcessing, setIsOcrProcessing] = useState(false);
+  const [ocrResult, setOcrResult] = useState<string>('');
+  const [ocrImage, setOcrImage] = useState<string | null>(null);
+  const [ocrMessage, setOcrMessage] = useState({ type: 'info' as 'info' | 'success' | 'error', text: '' });
+  const ocrFileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Video chat state
+  const [isVideoChatActive, setIsVideoChatActive] = useState(false);
+  const [videoStream, setVideoStream] = useState<MediaStream | null>(null);
+  const [isVideoOn, setIsVideoOn] = useState(true);
+  const [isAudioOn, setIsAudioOn] = useState(true);
+  const [isConnected, setIsConnected] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState('disconnected');
+  
+  // Virtual human state
+  const [avatarState, setAvatarState] = useState({
+    expression: 'neutral',
+    gesture: 'idle',
+    speech: '',
+    mouthShape: 'closed'
+  });
+  
+  // Annotation state
+  const [annotations, setAnnotations] = useState<Annotation[]>([]);
+  const [currentAnnotationType, setCurrentAnnotationType] = useState<'arrow' | 'circle' | 'text' | 'highlight'>('arrow');
+  const [isAddingAnnotation, setIsAddingAnnotation] = useState(false);
+  
+  // References
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const animationFrameRef = useRef<number>();
+  const videoStreamRef = useRef<MediaStream | null>(null);
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages, isTyping]);
 
+  useEffect(() => {
+    return () => {
+      cleanupVideoChat();
+    };
+  }, []);
+
   if (!project) return <div className="p-10 text-center text-white bg-slate-900 h-screen flex items-center justify-center">Invalid Project</div>;
+
+  // Video chat functions
+  const toggleVideoChat = async () => {
+    if (isVideoChatActive) {
+      cleanupVideoChat();
+    } else {
+      await initializeVideoChat();
+    }
+  };
+
+  const initializeVideoChat = async () => {
+    try {
+      // Request camera and microphone permissions
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: {
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+          frameRate: { ideal: 30 }
+        },
+        audio: true
+      });
+      
+      setVideoStream(stream);
+      videoStreamRef.current = stream;
+      
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+      }
+      
+      // Connect to GLM-Realtime
+      await connectToRealtime();
+      
+      // Start render loop for annotations
+      startRenderLoop();
+      
+      setIsVideoChatActive(true);
+    } catch (error) {
+      console.error('Failed to initialize video chat:', error);
+      setMessages(prev => [...prev, { role: 'assistant', text: '无法访问摄像头或麦克风，请检查权限设置。' }]);
+    }
+  };
+
+  const connectToRealtime = async () => {
+    const callback: RealtimeCallback = (data, type) => {
+      switch (type) {
+        case 'status':
+          setConnectionStatus(data.status || 'disconnected');
+          setIsConnected(data.status === 'connected');
+          break;
+        case 'text':
+          if (data.type === 'content_part_done') {
+            console.log('Content part completed:', data.part);
+          } else if (data.type === 'function_call_done') {
+            console.log('Function call completed:', data.function_name, data.function_arguments);
+          } else if (data.text) {
+            setMessages(prev => [...prev, { role: 'assistant', text: data.text }]);
+            
+            // Update avatar state
+            setAvatarState(prev => ({
+              ...prev,
+              speech: data.text,
+              mouthShape: 'talking',
+              expression: 'happy'
+            }));
+            
+            // Reset avatar state after 3 seconds
+            setTimeout(() => {
+              setAvatarState(prev => ({
+                ...prev,
+                mouthShape: 'closed',
+                expression: 'neutral'
+              }));
+            }, 3000);
+          }
+          break;
+        case 'annotation':
+          handleAnnotationUpdate(data);
+          break;
+        case 'audio':
+          handleAudioData(data);
+          break;
+        case 'video':
+          handleVideoData(data);
+          break;
+      }
+    };
+    
+    const success = await aiService.connectToRealtime(callback);
+    if (success) {
+      console.log('Connected to GLM-Realtime');
+    }
+  };
+
+  const startRenderLoop = () => {
+    const render = () => {
+      if (canvasRef.current && videoRef.current) {
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          // Clear canvas
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          
+          // Draw annotations
+          drawAnnotations(ctx);
+        }
+      }
+      animationFrameRef.current = requestAnimationFrame(render);
+    };
+    
+    animationFrameRef.current = requestAnimationFrame(render);
+  };
+
+  const drawAnnotations = (ctx: CanvasRenderingContext2D) => {
+    annotations.forEach(annotation => {
+      ctx.save();
+      ctx.strokeStyle = annotation.color;
+      ctx.fillStyle = annotation.color;
+      ctx.lineWidth = 2;
+      
+      switch (annotation.type) {
+        case 'arrow':
+          drawArrow(ctx, annotation);
+          break;
+        case 'circle':
+          drawCircle(ctx, annotation);
+          break;
+        case 'text':
+          drawText(ctx, annotation);
+          break;
+        case 'highlight':
+          drawHighlight(ctx, annotation);
+          break;
+      }
+      
+      ctx.restore();
+    });
+  };
+
+  const drawArrow = (ctx: CanvasRenderingContext2D, annotation: Annotation) => {
+    const { position, size } = annotation;
+    ctx.beginPath();
+    ctx.moveTo(position.x, position.y);
+    ctx.lineTo(position.x + size.width, position.y + size.height);
+    ctx.stroke();
+    
+    // Draw arrow head
+    const angle = Math.atan2(size.height, size.width);
+    const arrowLength = 15;
+    ctx.beginPath();
+    ctx.moveTo(position.x + size.width, position.y + size.height);
+    ctx.lineTo(
+      position.x + size.width - arrowLength * Math.cos(angle - Math.PI / 6),
+      position.y + size.height - arrowLength * Math.sin(angle - Math.PI / 6)
+    );
+    ctx.moveTo(position.x + size.width, position.y + size.height);
+    ctx.lineTo(
+      position.x + size.width - arrowLength * Math.cos(angle + Math.PI / 6),
+      position.y + size.height - arrowLength * Math.sin(angle + Math.PI / 6)
+    );
+    ctx.stroke();
+  };
+
+  const drawCircle = (ctx: CanvasRenderingContext2D, annotation: Annotation) => {
+    const { position, size } = annotation;
+    ctx.beginPath();
+    ctx.arc(position.x, position.y, Math.max(size.width, size.height) / 2, 0, Math.PI * 2);
+    ctx.stroke();
+  };
+
+  const drawText = (ctx: CanvasRenderingContext2D, annotation: Annotation) => {
+    const { position, content } = annotation;
+    ctx.font = '16px Arial';
+    ctx.fillStyle = annotation.color;
+    ctx.fillText(content, position.x, position.y);
+  };
+
+  const drawHighlight = (ctx: CanvasRenderingContext2D, annotation: Annotation) => {
+    const { position, size } = annotation;
+    ctx.fillStyle = `${annotation.color}40`; // Semi-transparent
+    ctx.fillRect(position.x, position.y, size.width, size.height);
+  };
+
+  const handleAnnotationUpdate = (data: any) => {
+    switch (data.action) {
+      case 'add':
+        setAnnotations(prev => [...prev, data.annotation]);
+        break;
+      case 'update':
+        setAnnotations(prev => prev.map(a => a.id === data.id ? { ...a, ...data.updates } : a));
+        break;
+      case 'delete':
+        setAnnotations(prev => prev.filter(a => a.id !== data.id));
+        break;
+    }
+  };
+
+  const handleAudioData = (data: any) => {
+    if (data.audio) {
+      try {
+        const audio = new Audio(`data:audio/wav;base64,${data.audio}`);
+        audio.play();
+      } catch (error) {
+        console.error('Error playing audio:', error);
+      }
+    }
+  };
+
+  const handleVideoData = (data: any) => {
+    // Handle video data from server
+    console.log('Received video data:', data);
+  };
+
+  const toggleVideo = () => {
+    if (videoStream) {
+      const videoTracks = videoStream.getVideoTracks();
+      videoTracks.forEach(track => {
+        track.enabled = !isVideoOn;
+      });
+      setIsVideoOn(!isVideoOn);
+    }
+  };
+
+  const toggleAudio = () => {
+    if (videoStream) {
+      const audioTracks = videoStream.getAudioTracks();
+      audioTracks.forEach(track => {
+        track.enabled = !isAudioOn;
+      });
+      setIsAudioOn(!isAudioOn);
+    }
+  };
+
+  const addAnnotation = (type: 'arrow' | 'circle' | 'text' | 'highlight', content: string = '') => {
+    const newAnnotation = aiService.addAnnotation({
+      type,
+      position: { x: 100, y: 100 },
+      size: { width: 100, height: 50 },
+      content: content || '标注内容',
+      color: '#FF5722'
+    });
+    
+    if (newAnnotation) {
+      setAnnotations(prev => [...prev, newAnnotation]);
+    }
+  };
+
+  const cleanupVideoChat = () => {
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+    }
+    
+    if (videoStreamRef.current) {
+      videoStreamRef.current.getTracks().forEach(track => track.stop());
+    }
+    
+    aiService.disconnectFromRealtime();
+    setIsVideoChatActive(false);
+    setVideoStream(null);
+    setIsConnected(false);
+    setConnectionStatus('disconnected');
+    setAnnotations([]);
+  };
 
   const handleSend = async (text?: string, image?: string) => {
     const msgText = text || inputValue;
@@ -35,15 +344,93 @@ const UserPreview: React.FC<{ projects: ProductProject[] }> = ({ projects }) => 
     setIsTyping(true);
 
     try {
-      let response = '';
       if (image) {
-        response = await aiService.analyzeInstallation(image, project.config.visionPrompt, project.config.provider);
+        if (!project.config.multimodalEnabled) {
+          setMessages(prev => [...prev, { role: 'assistant', text: "多模态分析功能已禁用，无法分析图片内容。" }]);
+        } else {
+          // 图片分析暂时不使用流式输出
+          const response = await aiService.analyzeInstallation(image, project.config.visionPrompt, project.config.provider);
+          setMessages(prev => [...prev, { role: 'assistant', text: response }]);
+        }
       } else {
-        response = await aiService.getSmartResponse(msgText, project.knowledgeBase, project.config.provider, project.config.systemInstruction);
+        // 定义工具
+        const tools = project.config.provider === AIProvider.ZHIPU ? [
+          {
+            type: 'function' as const,
+            function: {
+              name: 'get_product_info',
+              description: '获取产品详细信息',
+              parameters: {
+                type: 'object',
+                properties: {
+                  product_id: {
+                    type: 'string',
+                    description: '产品ID'
+                  }
+                },
+                required: ['product_id']
+              }
+            }
+          },
+          {
+            type: 'function' as const,
+            function: {
+              name: 'check_inventory',
+              description: '检查产品库存',
+              parameters: {
+                type: 'object',
+                properties: {
+                  product_id: {
+                    type: 'string',
+                    description: '产品ID'
+                  },
+                  location: {
+                    type: 'string',
+                    description: '库存位置'
+                  }
+                },
+                required: ['product_id']
+              }
+            }
+          }
+        ] : undefined;
+
+        // 对于文本消息，使用流式输出
+        const newMessageId = messages.length + 1;
+        setStreamingId(newMessageId);
+        setStreamingMessage('');
+
+        // 流式回调函数
+        const streamCallback = (chunk: string, isDone: boolean) => {
+          if (chunk) {
+            setStreamingMessage(prev => (prev || '') + chunk);
+          }
+          if (isDone) {
+            if (streamingMessage) {
+              setMessages(prev => [...prev, { role: 'assistant', text: streamingMessage }]);
+            }
+            setStreamingId(null);
+            setStreamingMessage(null);
+          }
+        };
+
+        // 调用AI服务，使用流式输出
+        await aiService.getSmartResponse(
+          msgText, 
+          project.knowledgeBase, 
+          project.config.provider, 
+          project.config.systemInstruction,
+          {
+            stream: true,
+            callback: streamCallback,
+            tools: tools
+          }
+        );
       }
-      setMessages(prev => [...prev, { role: 'assistant', text: response }]);
     } catch (e) {
       setMessages(prev => [...prev, { role: 'assistant', text: "Service busy. 请稍后再试。" }]);
+      setStreamingId(null);
+      setStreamingMessage(null);
     } finally {
       setIsTyping(false);
     }
@@ -57,99 +444,517 @@ const UserPreview: React.FC<{ projects: ProductProject[] }> = ({ projects }) => 
     }
   };
 
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaStreamRef.current = stream;
+      const recorder = new MediaRecorder(stream);
+      setMediaRecorder(recorder);
+      setAudioChunks([]);
+      setIsRecording(true);
+
+      recorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          setAudioChunks(prev => [...prev, event.data]);
+        }
+      };
+
+      recorder.onstop = handleStopRecording;
+      recorder.start();
+    } catch (error) {
+      console.error('Error starting recording:', error);
+      alert('无法访问麦克风，请检查权限设置。');
+    }
+  };
+
+  const handleStopRecording = async () => {
+    if (audioChunks.length === 0) return;
+
+    try {
+      const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const base64Audio = e.target?.result as string;
+        if (base64Audio) {
+          setIsTyping(true);
+          try {
+            // 调用智谱语音识别API
+            const transcript = await aiService.recognizeSpeech(base64Audio, project.config.provider);
+            if (transcript) {
+              // 基于知识库的答案与用户对话，模拟客服
+              handleSend(transcript);
+            } else {
+              setMessages(prev => [...prev, { role: 'assistant', text: '抱歉，我无法识别您的语音，请重试。' }]);
+            }
+          } catch (error) {
+            console.error('语音识别失败:', error);
+            setMessages(prev => [...prev, { role: 'assistant', text: '语音识别失败，请检查智谱API密钥是否正确。' }]);
+          } finally {
+            setIsTyping(false);
+          }
+        }
+      };
+      reader.readAsDataURL(audioBlob);
+    } catch (error) {
+      console.error('Error processing audio:', error);
+      setMessages(prev => [...prev, { role: 'assistant', text: '语音处理失败，请重试。' }]);
+      setIsTyping(false);
+    } finally {
+      setIsRecording(false);
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach(track => track.stop());
+      }
+      setMediaRecorder(null);
+      setAudioChunks([]);
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorder) {
+      mediaRecorder.stop();
+    }
+  };
+  
+  // OCR 相关方法
+  const showOcrMessage = (type: 'info' | 'success' | 'error', text: string) => {
+    setOcrMessage({ type, text });
+    setTimeout(() => setOcrMessage({ type: 'info', text: '' }), 3000);
+  };
+  
+  const handleOcrImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      processOcrImage(file);
+    }
+  };
+  
+  const processOcrImage = async (file: File) => {
+    try {
+      setIsOcrProcessing(true);
+      showOcrMessage('info', '正在识别图片中的文字...');
+      
+      // 显示上传的图片
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const imageUrl = event.target?.result as string;
+        setOcrImage(imageUrl);
+      };
+      reader.readAsDataURL(file);
+      
+      // 调用 OCR 服务
+      const ocrResult = await aiService.recognizeHandwriting(file, {
+        languageType: 'CHN_ENG',
+        probability: true
+      });
+      
+      if (ocrResult.status === 'succeeded') {
+        const recognizedText = ocrResult.words_result
+          .map((item: any) => item.words)
+          .join('\n');
+        
+        setOcrResult(recognizedText);
+        showOcrMessage('success', 'OCR识别成功');
+        
+        // 将识别结果发送到聊天
+        if (recognizedText) {
+          handleSend(`OCR识别结果:\n${recognizedText}`);
+        }
+      } else {
+        showOcrMessage('error', 'OCR识别失败');
+      }
+    } catch (error) {
+      console.error('OCR处理失败:', error);
+      showOcrMessage('error', 'OCR处理失败，请检查API密钥是否正确');
+    } finally {
+      setIsOcrProcessing(false);
+    }
+  };
+  
+  const clearOcrResults = () => {
+    setOcrResult('');
+    setOcrImage(null);
+    if (ocrFileInputRef.current) {
+      ocrFileInputRef.current.value = '';
+    }
+  };
+  
+  const openOcrFilePicker = () => {
+    ocrFileInputRef.current?.click();
+  };
+
   return (
     <div className="flex flex-col h-screen w-full max-w-lg mx-auto bg-[#0a0c10] shadow-2xl relative overflow-hidden font-sans border-x border-white/5">
-      <header className="bg-[#0f1218]/80 backdrop-blur-3xl p-6 text-white shrink-0 border-b border-white/5 z-20">
-        <div className="flex items-center justify-between mb-5">
-          <div className="flex items-center gap-4">
-             <div className="w-12 h-12 purple-gradient-btn rounded-2xl flex items-center justify-center">
-               <Sparkles size={24} />
-             </div>
-             <div>
-                <h1 className="font-black text-lg">{project.name}</h1>
-                <p className="text-[10px] text-emerald-400 font-black uppercase tracking-widest flex items-center gap-1.5">
-                   <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></span>
-                   Expert Mode 专家模式
-                </p>
-             </div>
-          </div>
-          <div className="p-2.5 bg-white/5 rounded-xl">
-             {project.config.provider === AIProvider.ZHIPU ? <Sparkles size={18} className="text-red-500" /> : <Globe size={18} className="text-blue-500" />}
-          </div>
-        </div>
-        
-        {project.config.videoGuides.length > 0 && (
-          <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
-            {project.config.videoGuides.map(v => (
-              <button 
-                key={v.id}
-                onClick={() => setActiveVideo(v.url)}
-                className="flex items-center gap-2 bg-white/5 border border-white/10 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-300 whitespace-nowrap"
-              >
-                <PlayCircle size={14} className="text-violet-500" /> {v.title}
-              </button>
-            ))}
-          </div>
-        )}
-      </header>
-
-      {activeVideo && (
-        <div className="absolute inset-0 z-50 bg-black/95 flex flex-col items-center justify-center p-6">
-          <button onClick={() => setActiveVideo(null)} className="absolute top-8 right-8 text-white p-3 bg-white/10 rounded-full"><X size={28}/></button>
-          <video src={activeVideo} controls autoPlay className="w-full rounded-[2rem] shadow-2xl border border-white/10" />
-        </div>
-      )}
-
-      <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-8">
-        {messages.map((m, i) => (
-          <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-2`}>
-            <div className={`max-w-[85%] ${m.role === 'user' ? 'order-1' : 'order-2'}`}>
-              <div className={`p-5 rounded-[2rem] shadow-xl text-sm leading-relaxed ${
-                m.role === 'user' ? 'bg-violet-600 text-white rounded-tr-none' : 'bg-white/5 text-slate-100 rounded-tl-none border border-white/5'
-              }`}>
-                {m.image && <img src={m.image} className="rounded-2xl mb-4" />}
-                <p>{m.text}</p>
+      {/* Video chat interface */}
+      {isVideoChatActive && (
+        <div className="absolute inset-0 z-50 bg-[#0a0c10] flex flex-col">
+          {/* Video chat header */}
+          <header className="bg-[#0f1218]/80 backdrop-blur-3xl p-6 text-white shrink-0 border-b border-white/5 z-20">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 purple-gradient-btn rounded-2xl flex items-center justify-center">
+                  <Sparkles size={24} />
+                </div>
+                <div>
+                  <h1 className="font-black text-lg">{project.name} - 视频客服</h1>
+                  <div className="flex items-center gap-4 mt-2">
+                    <div className="flex items-center gap-2">
+                      <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-emerald-400 animate-pulse' : 'bg-red-500'}`}></span>
+                      <span className="text-[10px] font-black uppercase tracking-widest">
+                        {connectionStatus === 'connected' ? '已连接' : '未连接'}
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-slate-400 font-black uppercase tracking-widest">
+                      GLM-Realtime
+                    </div>
+                  </div>
+                </div>
               </div>
-              {m.role === 'assistant' && (
-                <div className="flex gap-4 mt-3 pl-1">
-                  <button onClick={() => playTTS(m.text)} className="flex items-center gap-2 text-[10px] font-black text-slate-500 uppercase tracking-widest hover:text-violet-400">
-                    <Volume2 size={12}/> Audio 播放语音
-                  </button>
+              <button onClick={toggleVideoChat} className="p-3 bg-white/5 border border-white/10 rounded-xl text-white">
+                <X size={20} />
+              </button>
+            </div>
+          </header>
+
+          {/* Video area */}
+          <div className="flex-1 relative bg-black">
+            <div className="absolute inset-0 flex items-center justify-center">
+              {videoStream ? (
+                <>
+                  <video 
+                    ref={videoRef} 
+                    autoPlay 
+                    playsInline 
+                    className="w-full h-full object-cover"
+                    onMouseDown={(e) => {
+                      const pressTimer = setTimeout(async () => {
+                        // 长按截屏逻辑
+                        if (videoRef.current) {
+                          const video = videoRef.current;
+                          const canvas = document.createElement('canvas');
+                          canvas.width = video.videoWidth;
+                          canvas.height = video.videoHeight;
+                          const ctx = canvas.getContext('2d');
+                          if (ctx) {
+                            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                            canvas.toBlob(async (blob) => {
+                              if (blob) {
+                                const file = new File([blob], 'screenshot.png', { type: 'image/png' });
+                                // 使用现有的OCR处理函数
+                                await processOcrImage(file);
+                              }
+                            });
+                          }
+                        }
+                      }, 800);
+                      // 清除定时器
+                      const clearTimer = () => clearTimeout(pressTimer);
+                      if (videoRef.current) {
+                        videoRef.current.onmouseup = clearTimer;
+                        videoRef.current.onmouseleave = clearTimer;
+                      }
+                    }}
+                  />
+                  <canvas 
+                    ref={canvasRef} 
+                    className="absolute inset-0 w-full h-full"
+                    width={1280}
+                    height={720}
+                  />
+                </>
+              ) : (
+                <div className="text-center">
+                  <div className="w-24 h-24 mx-auto mb-4 bg-white/10 rounded-full flex items-center justify-center">
+                    <Video size={48} className="text-violet-400" />
+                  </div>
+                  <p className="text-white text-lg font-medium">正在初始化视频...</p>
                 </div>
               )}
             </div>
+            
+            {/* Bottom control bar */}
+            <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/80 to-transparent">
+              <div className="flex items-center justify-between">
+                {/* Video controls */}
+                <div className="flex items-center gap-3">
+                  <button 
+                    onClick={toggleVideo} 
+                    className={`p-3 rounded-full ${isVideoOn ? 'bg-white/10 text-white' : 'bg-red-500/20 text-red-400'}`}
+                  >
+                    <Video size={20} />
+                  </button>
+                  <button 
+                    onClick={toggleAudio} 
+                    className={`p-3 rounded-full ${isAudioOn ? 'bg-white/10 text-white' : 'bg-red-500/20 text-red-400'}`}
+                  >
+                    <Mic size={20} />
+                  </button>
+                  <button className="p-3 bg-white/10 rounded-full text-white">
+                    <Camera size={20} />
+                  </button>
+                </div>
+                
+                {/* Annotation tools */}
+                <div className="flex items-center gap-2">
+                  <button 
+                    onClick={() => addAnnotation('arrow')} 
+                    className="p-2 bg-white/10 rounded-lg text-white hover:bg-white/20"
+                  >
+                    <ArrowRight size={16} />
+                  </button>
+                  <button 
+                    onClick={() => addAnnotation('circle')} 
+                    className="p-2 bg-white/10 rounded-lg text-white hover:bg-white/20"
+                  >
+                    <Circle size={16} />
+                  </button>
+                  <button 
+                    onClick={() => addAnnotation('text', '文本标注')} 
+                    className="p-2 bg-white/10 rounded-lg text-white hover:bg-white/20"
+                  >
+                    <Pencil size={16} />
+                  </button>
+                  <button 
+                    onClick={() => addAnnotation('highlight')} 
+                    className="p-2 bg-white/10 rounded-lg text-white hover:bg-white/20"
+                  >
+                    <Highlighter size={16} />
+                  </button>
+                </div>
+                
+                {/* More controls */}
+                <div className="flex items-center gap-3">
+                  <button className="p-3 bg-white/10 rounded-full text-white">
+                    <Volume2 size={20} />
+                  </button>
+                  <button className="p-3 purple-gradient-btn rounded-full text-white">
+                    <Video size={20} />
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
-        ))}
-        {isTyping && (
-           <div className="flex gap-2 p-4 bg-white/5 w-fit rounded-2xl rounded-tl-none">
-              <div className="w-1.5 h-1.5 bg-violet-500 rounded-full animate-bounce"></div>
-              <div className="w-1.5 h-1.5 bg-violet-500 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
-              <div className="w-1.5 h-1.5 bg-violet-500 rounded-full animate-bounce" style={{animationDelay: '0.4s'}}></div>
-           </div>
-        )}
-      </div>
 
-      <div className="p-6 bg-[#0f1218]/80 backdrop-blur-3xl border-t border-white/5">
-        <div className="flex items-center gap-3">
-          {project.config.visionEnabled && (
-            <button onClick={() => fileInputRef.current?.click()} className="p-4 bg-white/5 border border-white/10 rounded-2xl text-violet-400"><Camera size={22}/></button>
-          )}
-          <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={(e) => {
-            const f = e.target.files?.[0];
-            if(f){ const r = new FileReader(); r.onload=()=>handleSend("分析照片 Analyze photo", r.result as string); r.readAsDataURL(f); }
-          }} />
-          <div className="flex-1 relative">
-            <input 
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-              placeholder="问我关于此产品的问题..."
-              className="w-full bg-white/5 border border-white/10 px-6 py-4 rounded-2xl text-sm text-white outline-none focus:ring-2 focus:ring-violet-500/20"
-            />
-            <button onClick={() => handleSend()} className="absolute right-2 top-2 p-2.5 purple-gradient-btn text-white rounded-xl"><Send size={18}/></button>
+          {/* Virtual human and chat area */}
+          <div className="w-full h-64 bg-gradient-to-b from-[#1a1d29] to-[#0f1218] flex flex-col">
+            {/* Virtual human area */}
+            <div className="h-48 flex items-center justify-center relative overflow-hidden">
+              <div className="absolute inset-0 opacity-20">
+                <div className="w-full h-full bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-violet-500 via-transparent to-transparent"></div>
+              </div>
+              <div className="relative z-10 text-center">
+                <div className="w-20 h-20 mx-auto mb-3 bg-gradient-to-br from-violet-500 to-purple-600 rounded-full flex items-center justify-center">
+                  <Sparkles size={40} className="text-white" />
+                </div>
+                <h3 className="text-white font-bold text-sm">智能助手</h3>
+                <p className="text-[10px] text-emerald-400 font-black uppercase tracking-widest">
+                  {avatarState.expression === 'neutral' ? '就绪' : '对话中'}
+                </p>
+              </div>
+            </div>
+            
+            {/* Chat input area */}
+            <div className="p-4 border-t border-white/5">
+              <div className="flex items-center gap-3">
+                <div className="flex-1 relative">
+                  <input 
+                    value={inputValue}
+                    onChange={(e) => setInputValue(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+                    placeholder="问我关于此产品的问题..."
+                    className="w-full bg-white/5 border border-white/10 px-6 py-3 rounded-xl text-sm text-white outline-none focus:ring-2 focus:ring-violet-500/20"
+                  />
+                  <button onClick={handleSend} className="absolute right-2 top-1.5 p-2 purple-gradient-btn text-white rounded-lg">
+                    <Send size={16} />
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
+      )}
+
+      {/* Regular chat interface */}
+      {!isVideoChatActive && (
+        <>
+          <header className="bg-[#0f1218]/80 backdrop-blur-3xl p-6 text-white shrink-0 border-b border-white/5 z-20">
+            <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 purple-gradient-btn rounded-2xl flex items-center justify-center">
+                  <Sparkles size={24} />
+                </div>
+                <div>
+                  <h1 className="font-black text-lg">{project.name}</h1>
+                  <p className="text-[10px] text-emerald-400 font-black uppercase tracking-widest flex items-center gap-1.5">
+                    <span className="w-2 h-2 bg-emerald-400 rounded-full animate-pulse"></span>
+                    Expert Mode 专家模式
+                  </p>
+                </div>
+              </div>
+              <div className="p-2.5 bg-white/5 rounded-xl">
+                <Sparkles size={18} className="text-red-500" />
+              </div>
+            </div>
+            
+            {project.config.videoGuides.length > 0 && (
+              <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
+                {project.config.videoGuides.map(v => (
+                  <button 
+                    key={v.id}
+                    onClick={() => setActiveVideo(v.url)}
+                    className="flex items-center gap-2 bg-white/5 border border-white/10 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest text-slate-300 whitespace-nowrap"
+                  >
+                    <PlayCircle size={14} className="text-violet-500" /> {v.title}
+                  </button>
+                ))}
+              </div>
+            )}
+          </header>
+
+          {activeVideo && (
+            <div className="absolute inset-0 z-50 bg-black/95 flex flex-col items-center justify-center p-6">
+              <button onClick={() => setActiveVideo(null)} className="absolute top-8 right-8 text-white p-3 bg-white/10 rounded-full"><X size={28}/></button>
+              <video src={activeVideo} controls autoPlay className="w-full rounded-[2rem] shadow-2xl border border-white/10" />
+            </div>
+          )}
+
+          {/* OCR 消息提示 */}
+          {ocrMessage.text && (
+            <div className={`mx-6 mt-4 p-3 rounded-lg flex items-center gap-2 ${
+              ocrMessage.type === 'success' ? 'bg-green-900/30 text-green-400' :
+              ocrMessage.type === 'error' ? 'bg-red-900/30 text-red-400' :
+              'bg-blue-900/30 text-blue-400'
+            }`}>
+              {ocrMessage.type === 'success' && <CheckCircle size={16} />}
+              {ocrMessage.type === 'error' && <AlertCircle size={16} />}
+              {ocrMessage.type === 'info' && <FileText size={16} />}
+              <span className="text-xs">{ocrMessage.text}</span>
+            </div>
+          )}
+          
+          {/* OCR 结果显示 */}
+          {ocrImage && (
+            <div className="mx-6 mb-4 p-4 bg-white/5 rounded-2xl border border-white/10">
+              <div className="flex justify-between items-start mb-3">
+                <h4 className="text-sm font-semibold text-white flex items-center gap-1">
+                  <ImageIcon size={14} />
+                  OCR 识别结果
+                </h4>
+                <button
+                  onClick={clearOcrResults}
+                  className="text-xs text-white/50 hover:text-white transition-colors"
+                >
+                  <X size={14} />
+                </button>
+              </div>
+              <div className="mb-3">
+                <img
+                  src={ocrImage}
+                  alt="OCR Image"
+                  className="w-full h-32 object-contain bg-white/5 rounded-xl"
+                />
+              </div>
+              <div>
+                <p className="text-xs text-white/80 whitespace-pre-line">
+                  {ocrResult || '识别中...'}
+                </p>
+              </div>
+            </div>
+          )}
+          
+          <div ref={scrollRef} className="flex-1 overflow-y-auto p-6 space-y-8">
+            {messages.map((m, i) => (
+              <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'} animate-in slide-in-from-bottom-2`}>
+                <div className={`max-w-[85%] ${m.role === 'user' ? 'order-1' : 'order-2'}`}>
+                  <div className={`p-5 rounded-[2rem] shadow-xl text-sm leading-relaxed ${
+                    m.role === 'user' ? 'bg-violet-600 text-white rounded-tr-none' : 'bg-white/5 text-slate-100 rounded-tl-none border border-white/5'
+                  }`}>
+                    {m.image && <img src={m.image} className="rounded-2xl mb-4" />}
+                    <p>{m.text}</p>
+                  </div>
+                  {m.role === 'assistant' && (
+                    <div className="flex gap-4 mt-3 pl-1">
+                      <button onClick={() => playTTS(m.text)} className="flex items-center gap-2 text-[10px] font-black text-slate-500 uppercase tracking-widest hover:text-violet-400">
+                        <Volume2 size={12}/> Audio 播放语音
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+            
+            {/* Streaming message display */}
+            {streamingMessage && (
+              <div className="flex justify-start animate-in slide-in-from-bottom-2">
+                <div className="max-w-[85%] order-2">
+                  <div className="p-5 rounded-[2rem] shadow-xl text-sm leading-relaxed bg-white/5 text-slate-100 rounded-tl-none border border-white/5">
+                    <p>{streamingMessage}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {isTyping && !streamingMessage && (
+              <div className="flex gap-2 p-4 bg-white/5 w-fit rounded-2xl rounded-tl-none">
+                <div className="w-1.5 h-1.5 bg-violet-500 rounded-full animate-bounce"></div>
+                <div className="w-1.5 h-1.5 bg-violet-500 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                <div className="w-1.5 h-1.5 bg-violet-500 rounded-full animate-bounce" style={{animationDelay: '0.4s'}}></div>
+              </div>
+            )}
+          </div>
+
+          <div className="p-6 bg-[#0f1218]/80 backdrop-blur-3xl border-t border-white/5">
+            <input
+              ref={ocrFileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleOcrImageUpload}
+              className="hidden"
+            />
+            <div className="flex items-center gap-3">
+              {project.config.visionEnabled && (
+                <button onClick={() => fileInputRef.current?.click()} className="p-4 bg-white/5 border border-white/10 rounded-2xl text-violet-400">
+                  <Camera size={22} />
+                </button>
+              )}
+              <button
+                onClick={openOcrFilePicker}
+                disabled={isOcrProcessing}
+                className={`p-4 rounded-2xl border ${isOcrProcessing ? 'bg-white/5 border-white/10 text-gray-400' : 'bg-white/5 border-white/10 text-violet-400'}`}
+              >
+                {isOcrProcessing ? (
+                  <Loader2 className="animate-spin" size={22} />
+                ) : (
+                  <FileText size={22} />
+                )}
+              </button>
+              <button onClick={isRecording ? stopRecording : startRecording} className={`p-4 rounded-2xl border ${isRecording ? 'bg-red-500/20 border-red-500/30 text-red-400' : 'bg-white/5 border-white/10 text-violet-400'}`}>
+                <Mic size={22} />
+              </button>
+              {project.config.videoChatEnabled && (
+                <button onClick={toggleVideoChat} className="p-4 bg-white/5 border border-white/10 rounded-2xl text-violet-400">
+                  <Video size={22} />
+                </button>
+              )}
+              <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) { const r = new FileReader(); r.onload = () => handleSend("分析照片 Analyze photo", r.result as string); r.readAsDataURL(f); }
+              }} />
+              <div className="flex-1 relative">
+                <input 
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+                  placeholder="问我关于此产品的问题..."
+                  className="w-full bg-white/5 border border-white/10 px-6 py-4 rounded-2xl text-sm text-white outline-none focus:ring-2 focus:ring-violet-500/20"
+                />
+                <button onClick={handleSend} className="absolute right-2 top-2 p-2.5 purple-gradient-btn text-white rounded-xl">
+                  <Send size={18} />
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 };

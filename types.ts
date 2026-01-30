@@ -14,7 +14,6 @@ export enum KnowledgeType {
 }
 
 export enum AIProvider {
-  GEMINI = 'gemini', // Global
   ZHIPU = 'zhipu'    // China
 }
 
@@ -27,6 +26,7 @@ export interface KnowledgeItem {
   fileSize?: string;
   createdAt: string;
   tags?: string[];
+  embedding?: number[];
 }
 
 export interface VideoGuide {
@@ -44,6 +44,11 @@ export interface ProjectConfig {
   visionPrompt: string;
   systemInstruction: string;
   videoGuides: VideoGuide[];
+  multimodalEnabled: boolean;
+  videoChatEnabled: boolean;
+  videoChatPrompt: string;
+  avatarEnabled: boolean;
+  annotationEnabled: boolean;
 }
 
 export interface ProductProject {
