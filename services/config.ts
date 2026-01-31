@@ -4,9 +4,8 @@
 // 在生产环境中，需要设置为后端服务器的公网地址
 export const API_CONFIG = {
   // 本地开发环境：通过Vite代理连接到本地后端
-  // 生产环境（Vercel）：需要设置为后端服务器的公网地址
-  // 注意：如果后端在本地电脑，需要使用内网穿透工具暴露到公网
-  BASE_URL: '/api',
+  // 生产环境（Vercel）：使用Cloudflare Tunnel公网地址
+  BASE_URL: isProduction() ? 'https://cardiovascular-giants-showed-findlaw.trycloudflare.com/api' : '/api',
   
   // 后端服务配置
   BACKEND: {
