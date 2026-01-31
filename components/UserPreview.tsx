@@ -164,7 +164,8 @@ const UserPreview: React.FC<{ projects?: ProductProject[] }> = ({ projects }) =>
       // 尝试从localStorage加载商家预配置的API密钥
       const savedApiKey = localStorage.getItem('zhipuApiKey');
       if (savedApiKey) {
-        aiService.setZhipuApiKey(savedApiKey);
+        // API密钥现在在后端服务器中管理
+        // 前端不再需要设置API密钥
       }
       // 如果没有localStorage中的密钥，aiService会自动使用环境变量中的密钥
     };
@@ -291,7 +292,8 @@ const UserPreview: React.FC<{ projects?: ProductProject[] }> = ({ projects }) =>
       }
       
       // 确保API密钥已设置到AI服务
-      aiService.setZhipuApiKey(savedApiKey);
+      // API密钥现在在后端服务器中管理
+      // 前端不再需要设置API密钥
       console.log('API密钥已设置');
       
       // Request camera and microphone permissions
@@ -595,7 +597,8 @@ const UserPreview: React.FC<{ projects?: ProductProject[] }> = ({ projects }) =>
           }
           
           // 确保API密钥已设置到AI服务
-          aiService.setZhipuApiKey(savedApiKey);
+          // API密钥现在在后端服务器中管理
+          // 前端不再需要设置API密钥
           console.log('API密钥已设置');
           
           // 图片分析暂时不使用流式输出
@@ -747,7 +750,8 @@ const UserPreview: React.FC<{ projects?: ProductProject[] }> = ({ projects }) =>
       // 确保使用保存的API密钥
       const savedApiKey = localStorage.getItem('zhipuApiKey');
       if (savedApiKey) {
-        aiService.setZhipuApiKey(savedApiKey);
+        // API密钥现在在后端服务器中管理
+        // 前端不再需要设置API密钥
       }
       
       const audioData = await aiService.generateSpeech(text, project.config.voiceName || 'tongtong', project.config.provider);
@@ -773,7 +777,8 @@ const UserPreview: React.FC<{ projects?: ProductProject[] }> = ({ projects }) =>
       }
       
       // 确保API密钥已设置到AI服务
-      aiService.setZhipuApiKey(savedApiKey);
+      // API密钥现在在后端服务器中管理
+      // 前端不再需要设置API密钥
       console.log('API密钥已设置');
       
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -891,7 +896,8 @@ const UserPreview: React.FC<{ projects?: ProductProject[] }> = ({ projects }) =>
       }
       
       // 确保API密钥已设置到AI服务
-      aiService.setZhipuApiKey(savedApiKey);
+      // API密钥现在在后端服务器中管理
+      // 前端不再需要设置API密钥
       console.log('API密钥已设置');
       
       // 调用 OCR 服务

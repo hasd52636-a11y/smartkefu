@@ -32,11 +32,8 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, onUpdate }) => 
   const videoImageInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    // 加载保存的API密钥
-    const savedApiKey = localStorage.getItem('zhipuApiKey');
-    if (savedApiKey) {
-      aiService.setZhipuApiKey(savedApiKey);
-    }
+    // API密钥现在在后端服务器中管理
+    // 前端不再需要设置API密钥
   }, []);
 
   if (!localProject) return <div className="p-10 text-slate-800 font-bold text-center">Project not found</div>;
@@ -800,7 +797,8 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, onUpdate }) => 
                             }
                             
                             // 确保API密钥已设置到服务中
-                            aiService.setZhipuApiKey(savedApiKey);
+                            // API密钥现在在后端服务器中管理
+                            // 前端不再需要设置API密钥
                             
                             // 显示加载状态
                             const button = event.target as HTMLButtonElement;

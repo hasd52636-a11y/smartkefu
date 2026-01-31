@@ -29,9 +29,9 @@ const Settings: React.FC = () => {
   };
 
   const handleSaveKey = () => {
-    // 将API密钥传递给AIService
-    aiService.setZhipuApiKey(zhipuApiKey);
-    // 可以选择将密钥存储在本地存储中，以便刷新页面后仍然有效
+    // API密钥现在在后端服务器中管理
+    // 前端不再需要设置API密钥
+    // 这里可以保留本地存储，以便在需要时查看
     localStorage.setItem('zhipuApiKey', zhipuApiKey);
     setKeySaved(true);
     setTimeout(() => {
@@ -44,7 +44,8 @@ const Settings: React.FC = () => {
     const savedZhipuKey = localStorage.getItem('zhipuApiKey');
     if (savedZhipuKey) {
       setZhipuApiKey(savedZhipuKey);
-      aiService.setZhipuApiKey(savedZhipuKey);
+      // API密钥现在在后端服务器中管理
+      // 前端不再需要设置API密钥
     }
   }, []);
 
@@ -96,7 +97,8 @@ const Settings: React.FC = () => {
                   setTestingZhipu(true);
                   try {
                     // 先更新AI服务中的密钥
-                    aiService.setZhipuApiKey(zhipuApiKey);
+                    // API密钥现在在后端服务器中管理
+                    // 前端不再需要设置API密钥
                     // 使用增强的智谱API测试功能
                     const testResult = await aiService.testZhipuConnection();
                     if (testResult.success) {
