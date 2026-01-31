@@ -1,5 +1,10 @@
 // 配置管理服务
 
+// 检查是否为生产环境
+export const isProduction = () => {
+  return import.meta.env.PROD;
+};
+
 // API基础URL配置
 // 在生产环境中，需要设置为后端服务器的公网地址
 export const API_CONFIG = {
@@ -23,11 +28,6 @@ export const API_CONFIG = {
 // 获取完整的API URL
 export const getApiUrl = (endpoint: string): string => {
   return `${API_CONFIG.BASE_URL}${endpoint}`;
-};
-
-// 检查是否为生产环境
-export const isProduction = () => {
-  return import.meta.env.PROD;
 };
 
 // 获取环境配置
