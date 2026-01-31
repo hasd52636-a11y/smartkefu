@@ -77,78 +77,112 @@ export class AIService {
 
   private async zhipuFetch(endpoint: string, body: any, isBinary: boolean = false) {
     const key = this.getZhipuApiKey();
-    const response = await fetch(`${ZHIPU_BASE_URL}${endpoint}`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${key}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-    });
-
-    if (!response.ok) {
-      const err = await response.json();
-      throw new Error(err?.error?.message || 'Zhipu API Error');
+    
+    // 检查API密钥是否存在
+    if (!key) {
+      throw new Error('No Zhipu API key provided');
     }
+    
+    try {
+      const response = await fetch(`${ZHIPU_BASE_URL}${endpoint}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${key}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      });
 
-    return isBinary ? response.arrayBuffer() : response.json();
+      if (!response.ok) {
+        let errorMessage = 'Zhipu API Error';
+        try {
+          const err = await response.json();
+          errorMessage = err?.error?.message || err?.message || errorMessage;
+        } catch (parseError) {
+          console.error('Error parsing error response:', parseError);
+        }
+        throw new Error(`${errorMessage} (${response.status})`);
+      }
+
+      return isBinary ? response.arrayBuffer() : response.json();
+    } catch (error) {
+      console.error('Zhipu API request failed:', error);
+      throw error;
+    }
   }
 
   // 智谱流式请求
   private async zhipuStreamFetch(endpoint: string, body: any, callback: StreamCallback) {
     const key = this.getZhipuApiKey();
-    const response = await fetch(`${ZHIPU_BASE_URL}${endpoint}`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${key}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(body),
-    });
-
-    if (!response.ok) {
-      const err = await response.json();
-      throw new Error(err?.error?.message || 'Zhipu API Error');
+    
+    // 检查API密钥是否存在
+    if (!key) {
+      throw new Error('No Zhipu API key provided');
     }
+    
+    try {
+      const response = await fetch(`${ZHIPU_BASE_URL}${endpoint}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${key}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      });
 
-    const reader = response.body?.getReader();
-    if (!reader) {
-      throw new Error('No response body');
-    }
+      if (!response.ok) {
+        let errorMessage = 'Zhipu API Error';
+        try {
+          const err = await response.json();
+          errorMessage = err?.error?.message || err?.message || errorMessage;
+        } catch (parseError) {
+          console.error('Error parsing error response:', parseError);
+        }
+        throw new Error(`${errorMessage} (${response.status})`);
+      }
 
-    const decoder = new TextDecoder();
-    let done = false;
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error('No response body');
+      }
 
-    while (!done) {
-      const { value, done: readerDone } = await reader.read();
-      done = readerDone;
-      
-      if (value) {
-        const chunk = decoder.decode(value, { stream: !done });
-        const lines = chunk.split('\n');
+      const decoder = new TextDecoder();
+      let done = false;
+
+      while (!done) {
+        const { value, done: readerDone } = await reader.read();
+        done = readerDone;
         
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const data = line.substring(6);
-            if (data === '[DONE]') {
-              callback('', true, 'stop');
-            } else {
-              try {
-                const parsed = JSON.parse(data);
-                const content = parsed.choices[0]?.delta?.content || '';
-                if (content) {
-                  callback(content, false);
+        if (value) {
+          const chunk = decoder.decode(value, { stream: !done });
+          const lines = chunk.split('\n');
+          
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const data = line.substring(6);
+              if (data === '[DONE]') {
+                callback('', true, 'stop');
+              } else {
+                try {
+                  const parsed = JSON.parse(data);
+                  const content = parsed.choices[0]?.delta?.content || '';
+                  if (content) {
+                    callback(content, false);
+                  }
+                  if (parsed.choices[0]?.finish_reason) {
+                    callback('', true, parsed.choices[0].finish_reason);
+                  }
+                } catch (error) {
+                  console.error('Error parsing SSE chunk:', error);
                 }
-                if (parsed.choices[0]?.finish_reason) {
-                  callback('', true, parsed.choices[0].finish_reason);
-                }
-              } catch (error) {
-                console.error('Error parsing SSE chunk:', error);
               }
             }
           }
         }
       }
+    } catch (error) {
+      console.error('Zhipu API stream request failed:', error);
+      throw error;
     }
   }
 
@@ -437,122 +471,172 @@ export class AIService {
   async connectToRealtime(callback: RealtimeCallback): Promise<boolean> {
     try {
       const key = this.getZhipuApiKey();
+      
+      // 检查API密钥是否存在
+      if (!key) {
+        console.error('GLM-Realtime connection failed: No API key provided');
+        callback({ error: '缺少API密钥，请联系管理员' }, 'status');
+        return false;
+      }
+      
       const endpoint = `wss://open.bigmodel.cn/api/paas/v4/realtime?model=${ZhipuModel.GLM_REALTIME}`;
       
+      console.log('Connecting to GLM-Realtime:', endpoint);
       this.realtimeWebSocket = new WebSocket(endpoint);
       this.realtimeCallbacks.push(callback);
       
-      this.realtimeWebSocket.onopen = () => {
-        console.log('GLM-Realtime connected');
-        this.isRealtimeConnected = true;
-        
-        // 发送认证消息
-        this.realtimeWebSocket?.send(JSON.stringify({
-          type: 'auth',
-          data: {
-            token: key
+      let connectionResolved = false;
+      
+      return new Promise((resolve) => {
+        this.realtimeWebSocket!.onopen = () => {
+          console.log('GLM-Realtime WebSocket connected');
+          
+          // 发送认证消息
+          try {
+            const authMessage = JSON.stringify({
+              type: 'auth',
+              data: {
+                token: key
+              }
+            });
+            console.log('Sending auth message...');
+            this.realtimeWebSocket?.send(authMessage);
+          } catch (error) {
+            console.error('Error sending auth message:', error);
+            callback({ error: '认证消息发送失败' }, 'status');
+            resolve(false);
           }
-        }));
+        };
         
-        callback({ status: 'connected' }, 'status');
-      };
-      
-      this.realtimeWebSocket.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data);
-          switch (data.type) {
-            case 'audio':
-              callback(data.data, 'audio');
-              break;
-            case 'video':
-              callback(data.data, 'video');
-              break;
-            case 'text':
-              callback(data.data, 'text');
-              break;
-            case 'annotation':
-              callback(data.data, 'annotation');
-              break;
-            case 'status':
-              callback(data.data, 'status');
-              break;
-            case 'error':
-              console.error('GLM-Realtime error:', data.data);
-              callback({ error: data.data }, 'status');
-              break;
-            case 'response.content_part.done':
-              // Handle content part done event
-              callback({
-                ...data,
-                type: 'content_part_done'
-              }, 'text');
-              break;
-            case 'response.function_call_arguments.done':
-              // Handle function call arguments done event
-              callback({
-                ...data,
-                type: 'function_call_done',
-                function_name: data.name,
-                function_arguments: data.arguments
-              }, 'text');
-              break;
-            case 'response.function_call.simple_browser':
-              callback(data, 'text');
-              break;
-            case 'response.text.delta':
-              callback(data, 'text');
-              break;
-            case 'response.text.done':
-              callback(data, 'text');
-              break;
-            case 'response.audio_transcript.delta':
-              callback(data, 'text');
-              break;
-            case 'response.audio_transcript.done':
-              callback(data, 'text');
-              break;
-            case 'response.audio.delta':
-              callback(data, 'audio');
-              break;
-            case 'response.audio.done':
-              callback(data, 'audio');
-              break;
-            case 'response.created':
-              callback(data, 'status');
-              break;
-            case 'response.cancelled':
-              callback(data, 'status');
-              break;
-            case 'response.done':
-              callback(data, 'status');
-              break;
-            case 'rate_limits.updated':
-              callback(data, 'status');
-              break;
-            case 'heartbeat':
-              callback(data, 'status');
-              break;
+        this.realtimeWebSocket!.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            console.log('Received GLM-Realtime message:', data.type);
+            
+            // 处理认证响应
+            if (data.type === 'auth' && data.data) {
+              if (data.data.status === 'success') {
+                console.log('GLM-Realtime authentication successful');
+                this.isRealtimeConnected = true;
+                callback({ status: 'connected' }, 'status');
+                if (!connectionResolved) {
+                  connectionResolved = true;
+                  resolve(true);
+                }
+              } else if (data.data.status === 'error') {
+                console.error('GLM-Realtime authentication failed:', data.data.message);
+                callback({ error: `认证失败: ${data.data.message}` }, 'status');
+                if (!connectionResolved) {
+                  connectionResolved = true;
+                  resolve(false);
+                }
+              }
+            }
+            
+            // 处理其他消息类型
+            switch (data.type) {
+              case 'audio':
+                callback(data.data, 'audio');
+                break;
+              case 'video':
+                callback(data.data, 'video');
+                break;
+              case 'text':
+                callback(data.data, 'text');
+                break;
+              case 'annotation':
+                callback(data.data, 'annotation');
+                break;
+              case 'status':
+                callback(data.data, 'status');
+                break;
+              case 'error':
+                console.error('GLM-Realtime error:', data.data);
+                callback({ error: data.data }, 'status');
+                break;
+              case 'response.content_part.done':
+                callback({ ...data, type: 'content_part_done' }, 'text');
+                break;
+              case 'response.function_call_arguments.done':
+                callback({ ...data, type: 'function_call_done', function_name: data.name, function_arguments: data.arguments }, 'text');
+                break;
+              case 'response.function_call.simple_browser':
+                callback(data, 'text');
+                break;
+              case 'response.text.delta':
+                callback(data, 'text');
+                break;
+              case 'response.text.done':
+                callback(data, 'text');
+                break;
+              case 'response.audio_transcript.delta':
+                callback(data, 'text');
+                break;
+              case 'response.audio_transcript.done':
+                callback(data, 'text');
+                break;
+              case 'response.audio.delta':
+                callback(data, 'audio');
+                break;
+              case 'response.audio.done':
+                callback(data, 'audio');
+                break;
+              case 'response.created':
+                callback(data, 'status');
+                break;
+              case 'response.cancelled':
+                callback(data, 'status');
+                break;
+              case 'response.done':
+                callback(data, 'status');
+                break;
+              case 'rate_limits.updated':
+                callback(data, 'status');
+                break;
+              case 'heartbeat':
+                // 忽略心跳消息，避免过多日志
+                break;
+              default:
+                console.log('Unhandled GLM-Realtime message type:', data.type);
+            }
+          } catch (error) {
+            console.error('Error parsing realtime message:', error);
           }
-        } catch (error) {
-          console.error('Error parsing realtime message:', error);
-        }
-      };
-      
-      this.realtimeWebSocket.onclose = () => {
-        console.log('GLM-Realtime disconnected');
-        this.isRealtimeConnected = false;
-        callback({ status: 'disconnected' }, 'status');
-      };
-      
-      this.realtimeWebSocket.onerror = (error) => {
-        console.error('GLM-Realtime connection error:', error);
-        callback({ error: 'Connection error' }, 'status');
-      };
-      
-      return true;
+        };
+        
+        this.realtimeWebSocket!.onclose = (event) => {
+          console.log('GLM-Realtime WebSocket closed:', event.code, event.reason);
+          this.isRealtimeConnected = false;
+          callback({ status: 'disconnected' }, 'status');
+          if (!connectionResolved) {
+            connectionResolved = true;
+            resolve(false);
+          }
+        };
+        
+        this.realtimeWebSocket!.onerror = (error) => {
+          console.error('GLM-Realtime WebSocket error:', error);
+          callback({ error: 'WebSocket连接错误' }, 'status');
+          if (!connectionResolved) {
+            connectionResolved = true;
+            resolve(false);
+          }
+        };
+        
+        // 设置连接超时
+        setTimeout(() => {
+          if (!connectionResolved) {
+            connectionResolved = true;
+            console.error('GLM-Realtime connection timeout');
+            callback({ error: '连接超时' }, 'status');
+            this.realtimeWebSocket?.close();
+            resolve(false);
+          }
+        }, 10000); // 10秒超时
+      });
     } catch (error) {
       console.error('Failed to connect to GLM-Realtime:', error);
-      callback({ error: 'Failed to connect' }, 'status');
+      callback({ error: '连接失败' }, 'status');
       return false;
     }
   }

@@ -79,9 +79,6 @@ const UserPreview: React.FC<{ projects?: ProductProject[] }> = ({ projects }) =>
   useEffect(() => {
     console.log('=== 扫码流程开始 ===');
     console.log('当前projectId:', projectId);
-    console.log('当前project状态:', project);
-    console.log('当前projectLoading状态:', projectLoading);
-    console.log('当前projectError状态:', projectError);
     
     const loadProject = async () => {
       console.log('1. 开始加载项目:', projectId);
@@ -96,6 +93,7 @@ const UserPreview: React.FC<{ projects?: ProductProject[] }> = ({ projects }) =>
       try {
         console.log('4. 设置加载状态为true');
         setProjectLoading(true);
+        setProjectError('');
         console.log('5. 验证项目ID:', projectId);
         
         // 验证项目ID并获取项目数据
@@ -131,27 +129,25 @@ const UserPreview: React.FC<{ projects?: ProductProject[] }> = ({ projects }) =>
         
         console.log('13. 项目加载完成，准备更新状态');
         
-        // 确保状态更新顺序：先设置项目数据，再关闭加载状态
-        setTimeout(() => {
-          console.log('14. 开始更新状态...');
-          console.log('14.1 设置project状态:', validatedProject.id, validatedProject.name);
-          setProject(validatedProject);
-          
-          // 初始化messages状态
-          const welcomeMessage = `您好！我是 ${validatedProject.name} 的 AI 专家。我已经加载了最新的产品说明书和视频教程，请问有什么可以帮您？`;
-          console.log('14.2 设置欢迎消息:', welcomeMessage);
-          setMessages([
-            { 
-              role: 'assistant', 
-              text: welcomeMessage 
-            }
-          ]);
-          
-          console.log('14.3 设置projectLoading为false');
-          setProjectLoading(false);
-          console.log('15. 状态更新完成，项目已就绪');
-          console.log('=== 扫码流程结束 ===');
-        }, 100);
+        // 直接更新状态，避免setTimeout可能导致的问题
+        console.log('14. 开始更新状态...');
+        console.log('14.1 设置project状态:', validatedProject.id, validatedProject.name);
+        setProject(validatedProject);
+        
+        // 初始化messages状态
+        const welcomeMessage = `您好！我是 ${validatedProject.name} 的 AI 专家。我已经加载了最新的产品说明书和视频教程，请问有什么可以帮您？`;
+        console.log('14.2 设置欢迎消息:', welcomeMessage);
+        setMessages([
+          { 
+            role: 'assistant', 
+            text: welcomeMessage 
+          }
+        ]);
+        
+        console.log('14.3 设置projectLoading为false');
+        setProjectLoading(false);
+        console.log('15. 状态更新完成，项目已就绪');
+        console.log('=== 扫码流程结束 ===');
       } catch (error) {
         console.error('16. 加载项目失败:', error);
         setProjectError('加载项目信息失败，请稍后重试');
@@ -288,7 +284,10 @@ const UserPreview: React.FC<{ projects?: ProductProject[] }> = ({ projects }) =>
 
   const initializeVideoChat = async () => {
     try {
+      console.log('开始初始化视频聊天...');
+      
       // Request camera and microphone permissions
+      console.log('请求摄像头和麦克风权限...');
       const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           width: { ideal: 1280 },
@@ -298,75 +297,107 @@ const UserPreview: React.FC<{ projects?: ProductProject[] }> = ({ projects }) =>
         audio: true
       });
       
+      console.log('获取到媒体流:', stream);
       setVideoStream(stream);
       videoStreamRef.current = stream;
       
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        console.log('视频流已设置到video元素');
       }
       
       // Connect to GLM-Realtime
-      await connectToRealtime();
+      console.log('连接到GLM-Realtime...');
+      const connected = await connectToRealtime();
       
-      // Start render loop for annotations
-      startRenderLoop();
-      
-      setIsVideoChatActive(true);
+      if (connected) {
+        // Start render loop for annotations
+        console.log('启动标注渲染循环...');
+        startRenderLoop();
+        
+        console.log('视频聊天初始化完成');
+        setIsVideoChatActive(true);
+      } else {
+        console.error('GLM-Realtime连接失败');
+        setMessages(prev => [...prev, { role: 'assistant', text: '视频客服连接失败，请检查网络连接后重试。' }]);
+        // 清理资源
+        if (stream) {
+          stream.getTracks().forEach(track => track.stop());
+        }
+        setVideoStream(null);
+        videoStreamRef.current = null;
+      }
     } catch (error) {
       console.error('Failed to initialize video chat:', error);
       setMessages(prev => [...prev, { role: 'assistant', text: '无法访问摄像头或麦克风，请检查权限设置。' }]);
     }
   };
 
-  const connectToRealtime = async () => {
-    const callback: RealtimeCallback = (data, type) => {
-      switch (type) {
-        case 'status':
-          setConnectionStatus(data.status || 'disconnected');
-          setIsConnected(data.status === 'connected');
-          break;
-        case 'text':
-          if (data.type === 'content_part_done') {
-            console.log('Content part completed:', data.part);
-          } else if (data.type === 'function_call_done') {
-            console.log('Function call completed:', data.function_name, data.function_arguments);
-          } else if (data.text) {
-            setMessages(prev => [...prev, { role: 'assistant', text: data.text }]);
-            
-            // Update avatar state
-            setAvatarState(prev => ({
-              ...prev,
-              speech: data.text,
-              mouthShape: 'talking',
-              expression: 'happy'
-            }));
-            
-            // Reset avatar state after 3 seconds
-            setTimeout(() => {
+  const connectToRealtime = async (): Promise<boolean> => {
+    return new Promise((resolve) => {
+      const callback: RealtimeCallback = (data, type) => {
+        console.log('收到GLM-Realtime消息:', type, data);
+        
+        switch (type) {
+          case 'status':
+            console.log('连接状态更新:', data.status);
+            setConnectionStatus(data.status || 'disconnected');
+            setIsConnected(data.status === 'connected');
+            if (data.status === 'connected') {
+              resolve(true);
+            } else if (data.error) {
+              console.error('GLM-Realtime连接错误:', data.error);
+              resolve(false);
+            }
+            break;
+          case 'text':
+            if (data.type === 'content_part_done') {
+              console.log('Content part completed:', data.part);
+            } else if (data.type === 'function_call_done') {
+              console.log('Function call completed:', data.function_name, data.function_arguments);
+            } else if (data.text) {
+              console.log('收到文本消息:', data.text);
+              setMessages(prev => [...prev, { role: 'assistant', text: data.text }]);
+              
+              // Update avatar state
               setAvatarState(prev => ({
                 ...prev,
-                mouthShape: 'closed',
-                expression: 'neutral'
+                speech: data.text,
+                mouthShape: 'talking',
+                expression: 'happy'
               }));
-            }, 3000);
-          }
-          break;
-        case 'annotation':
-          handleAnnotationUpdate(data);
-          break;
-        case 'audio':
-          handleAudioData(data);
-          break;
-        case 'video':
-          handleVideoData(data);
-          break;
-      }
-    };
-    
-    const success = await aiService.connectToRealtime(callback);
-    if (success) {
-      console.log('Connected to GLM-Realtime');
-    }
+              
+              // Reset avatar state after 3 seconds
+              setTimeout(() => {
+                setAvatarState(prev => ({
+                  ...prev,
+                  mouthShape: 'closed',
+                  expression: 'neutral'
+                }));
+              }, 3000);
+            }
+            break;
+          case 'annotation':
+            handleAnnotationUpdate(data);
+            break;
+          case 'audio':
+            handleAudioData(data);
+            break;
+          case 'video':
+            handleVideoData(data);
+            break;
+        }
+      };
+      
+      console.log('开始连接GLM-Realtime...');
+      aiService.connectToRealtime(callback).then(success => {
+        console.log('GLM-Realtime连接结果:', success);
+        resolve(success);
+      }).catch(error => {
+        console.error('GLM-Realtime连接异常:', error);
+        resolve(false);
+      });
+    });
   };
 
   const startRenderLoop = () => {
@@ -526,7 +557,9 @@ const UserPreview: React.FC<{ projects?: ProductProject[] }> = ({ projects }) =>
     const msgText = text || inputValue;
     if (!msgText && !image) return;
 
-    setMessages(prev => [...prev, { role: 'user', text: msgText, image }]);
+    // 立即添加用户消息到界面
+    const userMessage = { role: 'user' as const, text: msgText, image };
+    setMessages(prev => [...prev, userMessage]);
     setInputValue('');
     setIsTyping(true);
 
@@ -536,10 +569,16 @@ const UserPreview: React.FC<{ projects?: ProductProject[] }> = ({ projects }) =>
           setMessages(prev => [...prev, { role: 'assistant', text: "多模态分析功能已禁用，无法分析图片内容。" }]);
         } else {
           // 图片分析暂时不使用流式输出
+          console.log('开始分析图片...');
           const response = await aiService.analyzeInstallation(image, project.config.visionPrompt, project.config.provider);
+          console.log('图片分析结果:', response);
           setMessages(prev => [...prev, { role: 'assistant', text: response }]);
         }
       } else {
+        // 确保知识库存在
+        const knowledgeBase = project.knowledgeBase || [];
+        console.log('发送文本消息:', msgText, '知识库大小:', knowledgeBase.length);
+
         // 定义工具
         const tools = project.config.provider === AIProvider.ZHIPU ? [
           {
@@ -602,9 +641,10 @@ const UserPreview: React.FC<{ projects?: ProductProject[] }> = ({ projects }) =>
         };
 
         // 调用AI服务，使用流式输出
+        console.log('调用AI服务获取智能响应...');
         await aiService.getSmartResponse(
           msgText, 
-          project.knowledgeBase, 
+          knowledgeBase, 
           project.config.provider, 
           project.config.systemInstruction,
           {
@@ -613,6 +653,7 @@ const UserPreview: React.FC<{ projects?: ProductProject[] }> = ({ projects }) =>
             tools: tools
           }
         );
+        console.log('AI服务调用完成');
       }
     } catch (e) {
       console.error('AI服务调用失败:', e);
@@ -627,6 +668,8 @@ const UserPreview: React.FC<{ projects?: ProductProject[] }> = ({ projects }) =>
           errorMessage = "服务繁忙，请稍后重试。";
         } else if (e.message.includes('network') || e.message.includes('fetch')) {
           errorMessage = "网络连接异常，请检查网络后重试。";
+        } else {
+          errorMessage = `服务错误: ${e.message}`;
         }
       }
       
