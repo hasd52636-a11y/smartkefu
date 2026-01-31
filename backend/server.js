@@ -36,10 +36,10 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-// 解析JSON请求体
-app.use(express.json());
-// 解析URL编码请求体
-app.use(express.urlencoded({ extended: true }));
+// 解析JSON请求体（增加大小限制）
+app.use(express.json({ limit: '50mb' }));
+// 解析URL编码请求体（增加大小限制）
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // 获取API密钥（优先使用环境变量，其次使用配置文件）
 function getApiKey() {
@@ -316,37 +316,44 @@ app.post('/api/zhipu/*', async (req, res) => {
         }
     }
   } catch (error) {
-    console.error('Zhipu API proxy error:', error);
-    console.error('Error response:', error.response);
-    console.error('Error response data:', error.response?.data);
-    console.error('Error message:', error.message);
-    
-    // 尝试解析错误响应
-    let errorMessage = 'API proxy error';
-    
-    if (error.response?.data) {
-      if (typeof error.response.data === 'string') {
-        try {
-          const parsedError = JSON.parse(error.response.data);
-          errorMessage = parsedError.error?.message || parsedError.message || errorMessage;
-        } catch (parseError) {
-          errorMessage = error.response.data;
+      console.error('Zhipu API proxy error:', error);
+      console.error('Error response:', error.response);
+      console.error('Error response data:', error.response?.data);
+      console.error('Error message:', error.message);
+      
+      // 尝试解析错误响应
+      let errorMessage = 'API proxy error';
+      
+      if (error.response?.data) {
+        if (typeof error.response.data === 'string') {
+          try {
+            const parsedError = JSON.parse(error.response.data);
+            errorMessage = parsedError.error?.message || parsedError.message || errorMessage;
+          } catch (parseError) {
+            errorMessage = error.response.data;
+          }
+        } else if (error.response.data.error?.message) {
+          errorMessage = error.response.data.error.message;
+        } else if (error.response.data.message) {
+          errorMessage = error.response.data.message;
+        } else {
+          // 尝试将整个错误对象转换为字符串
+          try {
+            errorMessage = JSON.stringify(error.response.data);
+          } catch (stringifyError) {
+            errorMessage = 'Unknown error';
+          }
         }
-      } else if (error.response.data.error?.message) {
-        errorMessage = error.response.data.error.message;
-      } else if (error.response.data.message) {
-        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
       }
-    } else if (error.message) {
-      errorMessage = error.message;
+      
+      console.error('Final error message:', errorMessage);
+      
+      res.status(error.response?.status || 500).json({
+        error: errorMessage
+      });
     }
-    
-    console.error('Final error message:', errorMessage);
-    
-    res.status(error.response?.status || 500).json({
-      error: errorMessage
-    });
-  }
 });
 
 // 文件上传和OCR处理

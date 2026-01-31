@@ -886,7 +886,7 @@ const UserPreview: React.FC<{ projects?: ProductProject[] }> = ({ projects }) =>
       }
     } catch (error) {
       console.error('OCR处理失败:', error);
-      showOcrMessage('error', 'OCR处理失败，请检查API密钥是否正确');
+      showOcrMessage('error', 'OCR处理失败，请稍后重试');
     } finally {
       setIsOcrProcessing(false);
     }
