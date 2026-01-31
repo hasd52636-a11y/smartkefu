@@ -1,0 +1,12 @@
+{
+  "/": "pages/index.html",
+  "/_app": "pages/_app.js",
+  "/_document": "pages/_document.js",
+  "/_error": "pages/_error.js",
+  "/api/health": "pages/api/health.js",
+  "/api/zhipu/audio/speech": "pages/api/zhipu/audio/speech.js",
+  "/api/zhipu/audio/transcriptions": "pages/api/zhipu/audio/transcriptions.js",
+  "/api/zhipu/chat/completions": "pages/api/zhipu/chat/completions.js",
+  "/view/[id]": "pages/view/[id].html",
+  "/404": "pages/404.html"
+}

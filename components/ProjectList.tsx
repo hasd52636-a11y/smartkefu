@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useRouter } from 'next/router';
 import { ProductProject, ProjectStatus } from '../types';
 import { 
   Plus, 
@@ -26,7 +26,8 @@ const ProjectList: React.FC<ProjectListProps> = ({ projects, onAdd, onToggleStat
   const [showModal, setShowModal] = useState(false);
   const [newName, setNewName] = useState('');
   const [newDesc, setNewDesc] = useState('');
-  const navigate = useNavigate();
+  const router = useRouter();
+  const navigate = (path: string) => router.push(path);
 
   const handleAdd = () => {
     if (newName) {

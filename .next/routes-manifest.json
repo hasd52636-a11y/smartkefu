@@ -1,0 +1,102 @@
+{
+  "version": 3,
+  "pages404": true,
+  "appType": "pages",
+  "caseSensitive": false,
+  "basePath": "",
+  "redirects": [
+    {
+      "source": "/:path+/",
+      "destination": "/:path+",
+      "internal": true,
+      "priority": true,
+      "statusCode": 308,
+      "regex": "^(?:/((?:[^/]+?)(?:/(?:[^/]+?))*))/$"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/api/:path*",
+      "headers": [
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "*"
+        },
+        {
+          "key": "Access-Control-Allow-Methods",
+          "value": "GET, POST, PUT, DELETE, OPTIONS"
+        },
+        {
+          "key": "Access-Control-Allow-Headers",
+          "value": "Content-Type, Authorization"
+        }
+      ],
+      "regex": "^/api(?:/((?:[^/]+?)(?:/(?:[^/]+?))*))?(?:/)?$"
+    }
+  ],
+  "rewrites": {
+    "beforeFiles": [],
+    "afterFiles": [],
+    "fallback": []
+  },
+  "dynamicRoutes": [
+    {
+      "page": "/view/[id]",
+      "regex": "^/view/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/view/(?<nxtPid>[^/]+?)(?:/)?$"
+    }
+  ],
+  "staticRoutes": [
+    {
+      "page": "/",
+      "regex": "^/(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/(?:/)?$"
+    },
+    {
+      "page": "/api/health",
+      "regex": "^/api/health(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/health(?:/)?$"
+    },
+    {
+      "page": "/api/zhipu/audio/speech",
+      "regex": "^/api/zhipu/audio/speech(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/zhipu/audio/speech(?:/)?$"
+    },
+    {
+      "page": "/api/zhipu/audio/transcriptions",
+      "regex": "^/api/zhipu/audio/transcriptions(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/zhipu/audio/transcriptions(?:/)?$"
+    },
+    {
+      "page": "/api/zhipu/chat/completions",
+      "regex": "^/api/zhipu/chat/completions(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/zhipu/chat/completions(?:/)?$"
+    }
+  ],
+  "dataRoutes": [],
+  "rsc": {
+    "header": "rsc",
+    "varyHeader": "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch",
+    "prefetchHeader": "next-router-prefetch",
+    "didPostponeHeader": "x-nextjs-postponed",
+    "contentTypeHeader": "text/x-component",
+    "suffix": ".rsc",
+    "prefetchSegmentHeader": "next-router-segment-prefetch",
+    "prefetchSegmentSuffix": ".segment.rsc",
+    "prefetchSegmentDirSuffix": ".segments",
+    "clientParamParsing": false,
+    "dynamicRSCPrerender": false
+  },
+  "rewriteHeaders": {
+    "pathHeader": "x-nextjs-rewritten-path",
+    "queryHeader": "x-nextjs-rewritten-query"
+  }
+}

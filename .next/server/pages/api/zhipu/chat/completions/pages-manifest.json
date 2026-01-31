@@ -1,0 +1,3 @@
+{
+  "/api/zhipu/chat/completions": "pages/api/zhipu/chat/completions.js"
+}

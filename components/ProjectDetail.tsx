@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useRef, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useRouter } from 'next/router';
 import { ProductProject, ProjectStatus, KnowledgeType, KnowledgeItem, AIProvider, VideoGuide } from '../types';
 import { 
   ArrowLeft, Save, Trash2, Plus, FileText, Mic, QrCode, Settings,
@@ -16,8 +16,9 @@ interface ProjectDetailProps {
 }
 
 const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, onUpdate }) => {
-  const { id } = useParams();
-  const navigate = useNavigate();
+  const router = useRouter();
+  const { id } = router.query;
+  const navigate = (path: string) => router.push(path);
   const project = projects.find(p => p.id === id);
   const [activeTab, setActiveTab] = useState('knowledge');
   const [localProject, setLocalProject] = useState<ProductProject | null>(project ? JSON.parse(JSON.stringify(project)) : null);
@@ -103,8 +104,7 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, onUpdate }) => 
           title: file.name,
           url: reader.result as string,
           type: 'upload',
-          status: 'pending', // 上传的视频也需要审核
-          createdAt: new Date().toISOString()
+          status: 'ready'
         };
         if (localProject) {
           setLocalProject({
@@ -348,13 +348,10 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, onUpdate }) => 
                               ...localProject.config,
                               videoGuides: [...localProject.config.videoGuides, { 
                                 id: `v_${Date.now()}`, 
-                                title: videoDescription ? videoDescription.substring(0, 50) + (videoDescription.length > 50 ? '...' : '') : 'AI Generated Guide', 
-                                url: typeof videoResult === 'string' ? videoResult : videoResult.url || '', 
+                                title: 'AI Generated Guide', 
+                                url: typeof videoResult === 'string' ? videoResult : '', 
                                 type: 'ai', 
-                                status: 'pending', // 初始状态为待审核
-                                description: videoDescription,
-                                hasImage: !!videoImageFile,
-                                createdAt: new Date().toISOString()
+                                status: 'ready'
                               }]
                             }
                           });
@@ -655,8 +652,8 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, onUpdate }) => 
                     
                     {/* 审核状态标记 */}
                     <div className="absolute top-3 left-3 z-10">
-                      <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${v.status === 'pending' ? 'bg-yellow-500/20 text-yellow-400' : v.status === 'approved' ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
-                        {v.status === 'pending' ? '待审核' : v.status === 'approved' ? '已通过' : '已拒绝'}
+                      <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${v.status === 'ready' ? 'bg-green-500/20 text-green-400' : v.status === 'generating' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-red-500/20 text-red-400'}`}>
+                        {v.status === 'ready' ? '就绪' : v.status === 'generating' ? '生成中' : '失败'}
                       </span>
                     </div>
                     
@@ -667,38 +664,13 @@ const ProjectDetail: React.FC<ProjectDetailProps> = ({ projects, onUpdate }) => 
                       </span>
                     </div>
                     
-                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-all flex flex-col items-center justify-center gap-4 p-4">
-                       {/* 审核按钮 */}
-                       {v.status === 'pending' && (
-                         <div className="flex gap-2 mb-4">
-                           <button onClick={() => {
-                             if (localProject) {
-                               const updatedVideos = localProject.config.videoGuides.map(vg => 
-                                 vg.id === v.id ? { ...vg, status: 'approved' } : vg
-                               );
-                               setLocalProject({...localProject, config: {...localProject.config, videoGuides: updatedVideos}});
-                             }
-                           }} className="px-4 py-2 bg-green-500/20 text-green-400 rounded-full text-xs font-black"><CheckCircle size={16}/> 通过</button>
-                           <button onClick={() => {
-                             if (localProject) {
-                               const updatedVideos = localProject.config.videoGuides.map(vg => 
-                                 vg.id === v.id ? { ...vg, status: 'rejected' } : vg
-                               );
-                               setLocalProject({...localProject, config: {...localProject.config, videoGuides: updatedVideos}});
-                             }
-                           }} className="px-4 py-2 bg-red-500/20 text-red-400 rounded-full text-xs font-black"><X size={16}/> 拒绝</button>
-                         </div>
-                       )}
-                       
-                       {/* 基本操作 */}
-                       <div className="flex items-center gap-4">
-                         <button onClick={() => {
-                           if (localProject) {
-                             setLocalProject({...localProject, config: {...localProject.config, videoGuides: localProject.config.videoGuides.filter(vg => vg.id !== v.id)}});
-                           }
-                         }} className="p-3 bg-red-500/20 text-red-400 rounded-full"><Trash2 size={20}/></button>
-                         <span className="text-[10px] text-white font-black uppercase tracking-widest">{v.type}</span>
-                       </div>
+                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center gap-4">
+                       <button onClick={() => {
+                         if (localProject) {
+                           setLocalProject({...localProject, config: {...localProject.config, videoGuides: localProject.config.videoGuides.filter(vg => vg.id !== v.id)}});
+                         }
+                       }} className="p-3 bg-red-500/20 text-red-400 rounded-full"><Trash2 size={20}/></button>
+                       <span className="text-[10px] text-white font-black uppercase tracking-widest">{v.type}</span>
                     </div>
                   </div>
                 ))}
