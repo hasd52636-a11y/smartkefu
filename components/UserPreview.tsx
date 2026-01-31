@@ -1264,49 +1264,7 @@ const UserPreview: React.FC<{ projects?: ProductProject[] }> = ({ projects }) =>
                     <Video size={20} />
                   </button>
                 )}
-                <button
-                  onClick={async () => {
-                    try {
-                      // 检查API密钥是否存在
-                      const savedApiKey = localStorage.getItem('zhipuApiKey');
-                      if (!savedApiKey) {
-                        console.error('视频生成失败: 缺少API密钥');
-                        setMessages(prev => [...prev, { role: 'assistant', text: '视频生成失败，请联系管理员配置API密钥。' }]);
-                        return;
-                      }
-                      
-                      // 确保API密钥已设置到AI服务
-                      aiService.setZhipuApiKey(savedApiKey);
-                      console.log('API密钥已设置');
-                      
-                      // 构建视频生成提示
-                      let prompt = `Create a video guide for ${project?.name || 'product'}`;
-                      prompt += `: Installation and usage guide`;
-                      
-                      // 调用AI服务生成视频
-                      setIsTyping(true);
-                      const videoResult = await aiService.generateVideoGuide(prompt, project?.config.provider || 'ZHIPU');
-                      
-                      if (videoResult) {
-                        // 提示用户视频已提交审核
-                        setMessages(prev => [...prev, { 
-                          role: 'assistant', 
-                          text: '视频生成请求已提交！我们的团队将尽快审核并添加到知识库中。审核通过后，您可以在产品指南中查看生成的视频。' 
-                        }]);
-                      } else {
-                        setMessages(prev => [...prev, { role: 'assistant', text: '视频生成失败，请稍后重试。' }]);
-                      }
-                    } catch (error) {
-                      console.error('视频生成失败:', error);
-                      setMessages(prev => [...prev, { role: 'assistant', text: '视频生成失败，请检查API密钥是否正确或网络连接是否正常。' }]);
-                    } finally {
-                      setIsTyping(false);
-                    }
-                  }}
-                  className="p-3 bg-white/5 border border-white/10 rounded-xl text-violet-400"
-                >
-                  <Sparkles size={20} />
-                </button>
+
               </div>
             </div>
             
