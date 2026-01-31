@@ -67,6 +67,30 @@ export class AIService {
 
   private async zhipuFetch(endpoint: string, body: any, isBinary: boolean = false) {
     try {
+      // 检查body是否包含循环引用或React元素
+      try {
+        JSON.stringify(body);
+      } catch (jsonError) {
+        console.error('JSON stringify error:', jsonError);
+        console.error('Body type:', typeof body);
+        console.error('Body keys:', body && typeof body === 'object' ? Object.keys(body) : 'N/A');
+        
+        // 处理循环引用问题
+        if (jsonError instanceof TypeError && jsonError.message.includes('circular structure')) {
+          console.error('Circular structure detected, sanitizing body...');
+          // 简化body，只保留必要的字段
+          if (body && typeof body === 'object') {
+            // 对于聊天请求，只保留基本字段
+            if (body.messages) {
+              body.messages = body.messages.map((msg: any) => ({
+                role: msg.role,
+                content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content)
+              }));
+            }
+          }
+        }
+      }
+      
       const response = await fetch(`${ZHIPU_BASE_URL}${endpoint}`, {
         method: 'POST',
         headers: {
@@ -164,6 +188,11 @@ export class AIService {
    * Enhanced RAG Logic (Retrieval Augmented Generation)
    */
   private retrieveRelevantKnowledge(prompt: string, knowledge: KnowledgeItem[]): KnowledgeItem[] {
+    // 添加类型检查，确保prompt是字符串
+    if (typeof prompt !== 'string') {
+      console.warn('Invalid prompt type, using empty string instead:', typeof prompt);
+      return [];
+    }
     const query = prompt.toLowerCase();
     
     // 计算每个知识项的相关性得分
@@ -216,6 +245,18 @@ export class AIService {
     responseFormat?: { type: 'text' | 'json_object' };
   }) {
     try {
+      // 添加类型检查
+      if (typeof prompt !== 'string') {
+        console.warn('Invalid prompt type, using empty string instead:', typeof prompt);
+        prompt = '';
+      }
+      
+      // 确保knowledge是数组
+      if (!Array.isArray(knowledge)) {
+        console.warn('Invalid knowledge type, using empty array instead:', typeof knowledge);
+        knowledge = [];
+      }
+      
       // 1. 向量化用户查询
       const queryEmbedding = await this.createEmbedding(prompt, {
         model: ZhipuModel.EMBEDDING_3,
@@ -912,9 +953,34 @@ export class AIService {
     model?: string;
     dimensions?: number;
   }): Promise<any> {
+    // 输入验证
+    if (!texts) {
+      console.warn('Empty texts provided to createEmbedding');
+      return { data: [{ embedding: Array(768).fill(0) }] };
+    }
+    
+    // 确保输入是字符串或字符串数组
+    let safeTexts: string[];
+    if (Array.isArray(texts)) {
+      safeTexts = texts.map(text => {
+        if (typeof text !== 'string') {
+          console.warn('Non-string text found in createEmbedding:', typeof text);
+          return String(text);
+        }
+        return text;
+      });
+    } else {
+      if (typeof texts !== 'string') {
+        console.warn('Non-string texts provided to createEmbedding:', typeof texts);
+        safeTexts = [String(texts)];
+      } else {
+        safeTexts = [texts];
+      }
+    }
+    
     const requestBody = {
       model: options?.model || ZhipuModel.EMBEDDING_3,
-      input: Array.isArray(texts) ? texts : [texts],
+      input: safeTexts,
       dimensions: options?.dimensions
     };
 
