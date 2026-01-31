@@ -1242,19 +1242,17 @@ const UserPreview: React.FC<{ projects?: ProductProject[] }> = ({ projects }) =>
             {/* 功能按钮区 */}
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
-                {project.config.visionEnabled && (
-                  <div className="relative group">
-                    <button 
-                      onClick={() => fileInputRef.current?.click()} 
-                      className="p-3 bg-white/5 border border-white/10 rounded-xl text-violet-400"
-                    >
-                      <Camera size={20} />
-                    </button>
-                    <div className="absolute -bottom-full left-1/2 transform -translate-x-1/2 mb-2 bg-white/10 backdrop-blur-xl border border-white/20 rounded-xl p-2 text-[10px] font-black text-white opacity-0 group-hover:opacity-100 transition-all whitespace-nowrap z-50">
-                      上传图片
-                    </div>
+                <div className="relative group">
+                  <button 
+                    onClick={() => fileInputRef.current?.click()} 
+                    className="p-3 bg-white/5 border border-white/10 rounded-xl text-violet-400"
+                  >
+                    <Camera size={20} />
+                  </button>
+                  <div className="absolute -bottom-full left-1/2 transform -translate-x-1/2 mb-2 bg-white/10 backdrop-blur-xl border border-white/20 rounded-xl p-2 text-[10px] font-black text-white opacity-0 group-hover:opacity-100 transition-all whitespace-nowrap z-50">
+                    上传图片
                   </div>
-                )}
+                </div>
                 <button onClick={isRecording ? stopRecording : startRecording} className={`p-3 rounded-xl border ${isRecording ? 'bg-red-500/20 border-red-500/30 text-red-400' : 'bg-white/5 border-white/10 text-violet-400'}`}>
                   <Mic size={20} />
                 </button>
