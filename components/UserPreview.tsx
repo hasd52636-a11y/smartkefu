@@ -574,6 +574,12 @@ const UserPreview: React.FC<{ projects?: ProductProject[] }> = ({ projects }) =>
   };
 
   const handleSend = async (text?: string, image?: string) => {
+    // 添加类型检查，确保text是字符串
+    if (text !== undefined && typeof text !== 'string') {
+      console.warn('Invalid text type passed to handleSend:', typeof text);
+      return;
+    }
+    
     const msgText = text || inputValue;
     if (!msgText && !image) return;
 

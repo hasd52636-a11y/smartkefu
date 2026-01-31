@@ -1,8 +1,9 @@
 
 import { KnowledgeItem, AIProvider } from "../types";
+import { getApiUrl } from "./config";
 
-// 本地后端代理地址（生产环境中应该配置为实际的后端服务器地址）
-const ZHIPU_BASE_URL = 'http://192.168.1.4:3002/api/zhipu';
+// 本地后端代理地址（使用相对路径，避免混合内容错误）
+const ZHIPU_BASE_URL = getApiUrl('/zhipu');
 
 // 智谱模型类型
 export enum ZhipuModel {
@@ -120,6 +121,22 @@ export class AIService {
   // 智谱流式请求
   private async zhipuStreamFetch(endpoint: string, body: any, callback: StreamCallback) {
     try {
+      // 检查body是否包含循环引用或React元素
+      try {
+        JSON.stringify(body);
+      } catch (jsonError) {
+        console.error('JSON stringify error:', jsonError);
+        // 简化body，只保留必要的字段
+        if (body && typeof body === 'object') {
+          if (body.messages) {
+            body.messages = body.messages.map((msg: any) => ({
+              role: msg.role,
+              content: typeof msg.content === 'string' ? msg.content : JSON.stringify(msg.content)
+            }));
+          }
+        }
+      }
+      
       const response = await fetch(`${ZHIPU_BASE_URL}${endpoint}`, {
         method: 'POST',
         headers: {
@@ -146,16 +163,21 @@ export class AIService {
 
       const decoder = new TextDecoder();
       let done = false;
+      let buffer = '';
 
       while (!done) {
         const { value, done: readerDone } = await reader.read();
         done = readerDone;
         
         if (value) {
-          const chunk = decoder.decode(value, { stream: !done });
-          const lines = chunk.split('\n');
+          buffer += decoder.decode(value, { stream: !done });
           
-          for (const line of lines) {
+          // 处理完整的行
+          let lineIndex;
+          while ((lineIndex = buffer.indexOf('\n')) !== -1) {
+            const line = buffer.substring(0, lineIndex);
+            buffer = buffer.substring(lineIndex + 1);
+            
             if (line.startsWith('data: ')) {
               const data = line.substring(6);
               if (data === '[DONE]') {
@@ -172,6 +194,8 @@ export class AIService {
                   }
                 } catch (error) {
                   console.error('Error parsing SSE chunk:', error);
+                  console.error('Failed chunk:', data);
+                  // 忽略解析错误，继续处理下一个chunk
                 }
               }
             }
@@ -180,7 +204,8 @@ export class AIService {
       }
     } catch (error) {
       console.error('Zhipu API stream request failed:', error);
-      throw error;
+      // 不抛出错误，而是通过回调通知
+      callback('AI服务暂时不可用，请稍后重试。', true, 'error');
     }
   }
 
@@ -1021,7 +1046,7 @@ export class AIService {
       formData.append('probability', String(options?.probability || false));
 
       console.log('Sending OCR request to local proxy...');
-      const response = await fetch('http://localhost:3002/api/ocr', {
+      const response = await fetch(getApiUrl('/ocr'), {
         method: 'POST',
         body: formData,
       });
