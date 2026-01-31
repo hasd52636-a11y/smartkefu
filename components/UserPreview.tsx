@@ -283,18 +283,10 @@ const UserPreview: React.FC<{ projects?: ProductProject[] }> = ({ projects }) =>
     try {
       console.log('开始初始化视频聊天...');
       
-      // 检查API密钥是否存在
-      const savedApiKey = localStorage.getItem('zhipuApiKey');
-      if (!savedApiKey) {
-        console.error('视频客服连接失败: 缺少API密钥');
-        setMessages(prev => [...prev, { role: 'assistant', text: '视频客服连接失败，请联系管理员配置API密钥。' }]);
-        return;
-      }
-      
-      // 确保API密钥已设置到AI服务
       // API密钥现在在后端服务器中管理
       // 前端不再需要设置API密钥
-      console.log('API密钥已设置');
+      console.log('API密钥在后端管理');
+
       
       // Request camera and microphone permissions
       console.log('请求摄像头和麦克风权限...');
@@ -594,20 +586,8 @@ const UserPreview: React.FC<{ projects?: ProductProject[] }> = ({ projects }) =>
         if (!project.config.multimodalEnabled) {
           setMessages(prev => [...prev, { role: 'assistant', text: "多模态分析功能已禁用，无法分析图片内容。" }]);
         } else {
-          // 检查API密钥是否存在
-          const savedApiKey = localStorage.getItem('zhipuApiKey');
-          if (!savedApiKey) {
-            console.error('图片分析失败: 缺少API密钥');
-            setMessages(prev => [...prev, { role: 'assistant', text: '图片分析失败，请联系管理员配置API密钥。' }]);
-            return;
-          }
-          
-          // 确保API密钥已设置到AI服务
           // API密钥现在在后端服务器中管理
           // 前端不再需要设置API密钥
-          console.log('API密钥已设置');
-          
-          // 图片分析暂时不使用流式输出
           console.log('开始分析图片...');
           const response = await aiService.analyzeInstallation(image, project.config.visionPrompt, project.config.provider);
           console.log('图片分析结果:', response);
@@ -753,13 +733,8 @@ const UserPreview: React.FC<{ projects?: ProductProject[] }> = ({ projects }) =>
 
   const playTTS = async (text: string) => {
     try {
-      // 确保使用保存的API密钥
-      const savedApiKey = localStorage.getItem('zhipuApiKey');
-      if (savedApiKey) {
-        // API密钥现在在后端服务器中管理
-        // 前端不再需要设置API密钥
-      }
-      
+      // API密钥现在在后端服务器中管理
+      // 前端不再需要设置API密钥
       const audioData = await aiService.generateSpeech(text, project.config.voiceName || 'tongtong', project.config.provider);
       if (audioData) {
         const audio = new Audio(`data:audio/wav;base64,${audioData}`);
@@ -774,18 +749,9 @@ const UserPreview: React.FC<{ projects?: ProductProject[] }> = ({ projects }) =>
 
   const startRecording = async () => {
     try {
-      // 检查API密钥是否存在
-      const savedApiKey = localStorage.getItem('zhipuApiKey');
-      if (!savedApiKey) {
-        console.error('语音识别失败: 缺少API密钥');
-        setMessages(prev => [...prev, { role: 'assistant', text: '语音识别失败，请联系管理员配置API密钥。' }]);
-        return;
-      }
-      
-      // 确保API密钥已设置到AI服务
       // API密钥现在在后端服务器中管理
       // 前端不再需要设置API密钥
-      console.log('API密钥已设置');
+      console.log('开始语音识别...');
       
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       mediaStreamRef.current = stream;
@@ -892,19 +858,10 @@ const UserPreview: React.FC<{ projects?: ProductProject[] }> = ({ projects }) =>
       };
       reader.readAsDataURL(file);
       
-      // 检查API密钥是否存在
-      const savedApiKey = localStorage.getItem('zhipuApiKey');
-      if (!savedApiKey) {
-        console.error('OCR处理失败: 缺少API密钥');
-        showOcrMessage('error', 'OCR处理失败，请联系管理员配置API密钥。');
-        setIsOcrProcessing(false);
-        return;
-      }
-      
-      // 确保API密钥已设置到AI服务
       // API密钥现在在后端服务器中管理
       // 前端不再需要设置API密钥
-      console.log('API密钥已设置');
+      console.log('API密钥在后端管理');
+
       
       // 调用 OCR 服务
       const ocrResult = await aiService.recognizeHandwriting(file, {
