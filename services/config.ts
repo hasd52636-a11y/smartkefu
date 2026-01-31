@@ -10,11 +10,11 @@ export const isProduction = () => {
 export const API_CONFIG = {
   // 本地开发环境：通过Vite代理连接到本地后端
   // 生产环境（Vercel）：使用Cloudflare Tunnel公网地址
-  BASE_URL: isProduction() ? 'https://cardiovascular-giants-showed-findlaw.trycloudflare.com/api' : '/api',
+  BASE_URL: isProduction() ? 'https://male-chat-postage-against.trycloudflare.com/api' : '/api',
   
   // 后端服务配置
   BACKEND: {
-    PORT: 3002,
+    PORT: 3003,
     HOST: 'localhost'
   },
   
