@@ -2,7 +2,7 @@
 import { KnowledgeItem, AIProvider } from "../types";
 
 // 本地后端代理地址（生产环境中应该配置为实际的后端服务器地址）
-const ZHIPU_BASE_URL = 'http://localhost:3002/api/zhipu';
+const ZHIPU_BASE_URL = 'http://192.168.1.4:3002/api/zhipu';
 
 // 智谱模型类型
 export enum ZhipuModel {
